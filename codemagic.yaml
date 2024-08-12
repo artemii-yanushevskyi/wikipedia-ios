@@ -1,5 +1,7 @@
-definitions:
-  workflow: &base_workflow
+workflows:
+  wikipedia-mac-mini-m2:
+    name: Wikipedia Workflow with Mac mini M2
+    instance_type: mac_mini_m2
     environment:
       vars:
         XCODE_PROJECT: "Wikipedia.xcodeproj"
@@ -9,46 +11,7 @@ definitions:
         script: brew install clang-format swiftlint || brew upgrade clang-format swiftlint
       - name: Installing scripts
         script: ./scripts/setup
-      - name: Building projects
+      - name: Build
         script: |
-          SECONDS=0
-          xcodebuild clean build -project $XCODE_PROJECT -scheme $XCODE_SCHEME -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 14 Pro,OS=16.2' -configuration Debug CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
-
-          duration=$SECONDS
-          BUILD_TIME="$(($duration / 60))m $(($duration % 60))s"
-          echo $BUILD_TIME > build_time
-      - name: Running tests
-        script: |
-          SECONDS=0
-          time xcodebuild clean test -project $XCODE_PROJECT -scheme $XCODE_SCHEME -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 14 Pro,OS=16.2'
-
-          duration=$SECONDS
-          TESTS_TIME="$(($duration / 60))m $(($duration % 60))s"
-          echo $TESTS_TIME > tests_time
-      - name: Record timings to Benchmarks repo
-        script: |
-          echo Update Benchmarks repo...
-          export BUILD_TIME=$(cat build_time)
-          export TESTS_TIME=$(cat tests_time)
-          git clone git@github.com:codemagic-ci-cd/codemagic-benchmarks.git
-          cd codemagic-benchmarks
-          scripts/update_wikipedia.sh
-          git config --global user.name "codemagic ci"
-          git config --global user.email "devrel@nevercode.io"
-          git add README.md
-          git commit -m "update wikipedia app benchmark"
-          git push origin main
-
-workflows:
-  wikipedia-mac-pro:
-    <<: *base_workflow
-    name: Wikipedia Workflow with Mac Pro
-    instance_type: mac_pro
-  wikipedia-mac-mini-m1:
-    <<: *base_workflow
-    name: Wikipedia Workflow with Mac mini M1
-    instance_type: mac_mini_m1
-  wikipedia-mac-mini-m2:
-    <<: *base_workflow
-    name: Wikipedia Workflow with Mac mini M2
+          xcodebuild clean build -project $XCODE_PROJECT -scheme $XCODE_SCHEME -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.5' -configuration Debug CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
 
