@@ -1,7 +1,6 @@
 workflows:
   wikipedia-mac-mini-m2:
     name: Wikipedia Workflow with Mac mini M2
-    instance_type: mac_mini_m2
     environment:
       vars:
         XCODE_PROJECT: "Wikipedia.xcodeproj"
