@@ -2,6 +2,7 @@ workflows:
   wikipedia-mac-mini-m2:
     name: Wikipedia Workflow with Mac mini M2
     environment:
+      xcode: edge
       vars:
         XCODE_PROJECT: "Wikipedia.xcodeproj"
         XCODE_SCHEME: "Wikipedia"
