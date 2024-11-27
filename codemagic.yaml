@@ -14,5 +14,6 @@ workflows:
       - name: Build
         script: |
           xcodebuild clean build -project $XCODE_PROJECT -scheme $XCODE_SCHEME -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 15,OS=18.0' -configuration Debug CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+      - sleep 60
     artifacts:
       - /Users/builder/Library/Developer/Xcode/DerivedData/**/*.app
