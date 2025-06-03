@@ -14,7 +14,8 @@ workflows:
           xcodebuild clean build \
             -project $XCODE_PROJECT \
             -scheme $XCODE_SCHEME \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.2' \
             -configuration Debug \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
