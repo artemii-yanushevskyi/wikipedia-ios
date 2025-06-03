@@ -11,8 +11,15 @@ workflows:
         script: brew install clang-format swiftlint || brew upgrade clang-format swiftlint
       - name: Installing scripts
         script: ./scripts/setup
-      - name: Build
+      - name: Build with Generic Destination
         script: |
-          xcodebuild clean build -project $XCODE_PROJECT -scheme $XCODE_SCHEME -sdk iphonesimulator -destination 'platform=iOS Simulator,name=Any iOS Simulator Device' -configuration Debug CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+          xcodebuild clean build \
+            -project $XCODE_PROJECT \
+            -scheme $XCODE_SCHEME \
+            -destination 'generic/platform=iphonesimulator' \
+            -configuration Debug \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
     artifacts:
       - /Users/builder/Library/Developer/Xcode/DerivedData/**/*.app
