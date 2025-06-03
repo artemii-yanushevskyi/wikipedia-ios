@@ -7,8 +7,6 @@ workflows:
         XCODE_PROJECT: "Wikipedia.xcodeproj"
         XCODE_SCHEME: "Wikipedia"
     scripts:
-      - name: Upgrade brew
-        script: brew install clang-format swiftlint || brew upgrade clang-format swiftlint
       - name: Installing scripts
         script: ./scripts/setup
       - name: Build with Generic Destination
@@ -16,7 +14,7 @@ workflows:
           xcodebuild clean build \
             -project $XCODE_PROJECT \
             -scheme $XCODE_SCHEME \
-            -destination 'generic/platform=iphonesimulator' \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' \
             -configuration Debug \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
