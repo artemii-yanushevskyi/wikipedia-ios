@@ -34,8 +34,6 @@ extension ArticleViewController: ArticleWebMessageHandling {
             scrollToAnchorCompletions.removeAll()
         case .viewInBrowser:
             navigate(to: self.articleURL, useSafari: true)
-        case .aaaldInsertOnScreen:
-            handleAaaLDInsertOnScreenEvent()
         }
     }
     
@@ -59,12 +57,9 @@ extension ArticleViewController: ArticleWebMessageHandling {
         let oldState = state
         state = .loaded
         
-        if altTextExperimentViewModel == nil {
-            showWIconPopoverIfNecessary()
-        }
-        
+        presentTooltipsIfNeeded()
+
         refreshControl.endRefreshing()
-        surveyTimerController?.articleContentDidLoad()
         loadSummary(oldState: oldState)
         initialSetupCompletion?()
         initialSetupCompletion = nil
@@ -74,7 +69,10 @@ extension ArticleViewController: ArticleWebMessageHandling {
         assignScrollStateFromArticleFlagsIfNecessary()
         articleLoadWaitGroup?.leave()
         addToHistory()
+        persistPageViewsForWikipediaInReview()
+        loadMediaWikiInfoAndUpdateToolbar()
         syncCachedResourcesIfNeeded()
+        messagingController.updateDarkModeMainPageIfNeeded(articleURL: articleURL, theme: theme)
     }
     
     func handleFooterItem(type: PageContentService.Footer.Menu.Item, payload: Any?) {
@@ -106,7 +104,7 @@ extension ArticleViewController: ArticleWebMessageHandling {
     
     func setupFooter() {
         // Always use Configuration.production for related articles
-        guard let baseURL = Configuration.production.pageContentServiceAPIURLForURL(articleURL, appending: []) else {
+        guard let baseURL = Configuration.production.pageContentServiceAPIURLForURL(articleURL, appending: [])?.wmf_site else {
             return
         }
         var menuItems: [PageContentService.Footer.Menu.Item] = [.talkPage, .lastEdited, .pageIssues, .disambiguation]
@@ -114,9 +112,5 @@ extension ArticleViewController: ArticleWebMessageHandling {
             menuItems.append(.coordinate)
         }
         messagingController.addFooter(articleURL: articleURL, restAPIBaseURL: baseURL, menuItems: menuItems, lastModified: article.lastModifiedDate)
-    }
-    
-    func handleAaaLDInsertOnScreenEvent() {
-        surveyTimerController?.userDidScrollPastLivingDocArticleContentInsert(withState: state)
     }
 }

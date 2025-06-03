@@ -21,7 +21,7 @@ public protocol WMFWatchlistLoggingDelegate: AnyObject {
     func logWatchlistDidLoad(itemCount: Int)
 }
 
-public final class WMFWatchlistViewController: WMFCanvasViewController {
+public final class WMFWatchlistViewController: WMFCanvasViewController, WMFNavigationBarConfiguring {
 
 	// MARK: - Nested Types
 
@@ -51,7 +51,7 @@ public final class WMFWatchlistViewController: WMFCanvasViewController {
             self.articleTitleMetadataKey = articleTitleMetadaKey
 		}
 
-		func WMFSwiftUIMenuButtonUserDidTap(configuration: WMFSmallMenuButton.Configuration, item: WMFSmallMenuButton.MenuItem?) {
+		func wmfSwiftUIMenuButtonUserDidTap(configuration: WMFSmallMenuButton.Configuration, item: WMFSmallMenuButton.MenuItem?) {
             guard let username = configuration.title, let tappedTitle = item?.title,
                     let wmfProject = configuration.metadata[wmfProjectMetadataKey] as? WMFProject,
                   let revisionID = configuration.metadata[revisionIDMetadataKey] as? UInt,
@@ -84,7 +84,7 @@ public final class WMFWatchlistViewController: WMFCanvasViewController {
             }
 		}
 
-        func WMFSwiftUIMenuButtonUserDidTapAccessibility(configuration: WMFSmallMenuButton.Configuration, item: WMFSmallMenuButton.MenuItem?) {
+        func wmfSwiftUIMenuButtonUserDidTapAccessibility(configuration: WMFSmallMenuButton.Configuration, item: WMFSmallMenuButton.MenuItem?) {
             guard let username = configuration.title, let tappedTitle = item?.title,
                     let wmfProject = configuration.metadata[wmfProjectMetadataKey] as? WMFProject,
                   let revisionID = configuration.metadata[revisionIDMetadataKey] as? UInt,
@@ -158,6 +158,7 @@ public final class WMFWatchlistViewController: WMFCanvasViewController {
 
         self.hostingViewController.emptyViewDelegate = self
         self.hostingViewController.loggingDelegate = loggingDelegate
+        hidesBottomBarWhenPushed = true
 	}
 
 	required init?(coder: NSCoder) {
@@ -167,8 +168,7 @@ public final class WMFWatchlistViewController: WMFCanvasViewController {
 	public override func viewDidLoad() {
 		super.viewDidLoad()
 		addComponent(hostingViewController, pinToEdges: true)
-		self.title = viewModel.localizedStrings.title
-		navigationItem.rightBarButtonItem = filterBarButton
+		
         viewModel.$activeFilterCount.sink { [weak self] newCount in
             guard let self else {
                 return
@@ -186,27 +186,34 @@ public final class WMFWatchlistViewController: WMFCanvasViewController {
         super.viewWillAppear(animated)
         
 		reachabilityHandler?(.appearing)
-        if viewModel.presentationConfiguration.showNavBarUponAppearance {
-            navigationController?.setNavigationBarHidden(false, animated: false)
-        }
+        configureNavigationBar()
         
+    }
+    
+    private func configureNavigationBar() {
+        let titleConfig = WMFNavigationBarTitleConfig(title: viewModel.localizedStrings.title, customView: nil, alignment: .centerCompact)
+        
+        configureNavigationBar(titleConfig: titleConfig, closeButtonConfig: nil, profileButtonConfig: nil, tabsButtonConfig: nil, searchBarConfig: nil, hideNavigationBarOnScroll: false)
+        
+        navigationItem.rightBarButtonItem = filterBarButton
     }
     
     public override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         
 		reachabilityHandler?(.disappearing)
-        if viewModel.presentationConfiguration.hideNavBarUponDisappearance {
-            self.navigationController?.setNavigationBarHidden(true, animated: false)
-        }
     }
 
     public func showFilterView() {
 		let filterView = WMFWatchlistFilterView(viewModel: self.filterViewModel, doneAction: { [weak self] in
             self?.dismiss(animated: true)
         })
+        
+        let hostingController = WMFWatchlistFilterHostingController(viewModel: self.filterViewModel, filterView: filterView, delegate: self)
+        
+        let navigationViewController = WMFComponentNavigationController(rootViewController: hostingController, modalPresentationStyle: .pageSheet)
 
-        self.present(WMFWatchlistFilterHostingController(viewModel: self.filterViewModel, filterView: filterView, delegate: self), animated: true)
+        self.present(navigationViewController, animated: true)
     }
 }
 

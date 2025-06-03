@@ -43,10 +43,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func applicationWillTerminate(_ application: UIApplication) {
         updateDynamicIconShortcutItems()
     }
-    
-    func application(_ application: UIApplication, willContinueUserActivityWithType userActivityType: String) -> Bool {
-        return true
-    }
 
     // MARK: UISceneSession Lifecycle
 
@@ -75,8 +71,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
     
     func scheduleDatabaseHousekeeperTask() {
-        let databaseHousekeeperTask = BGAppRefreshTaskRequest(identifier: Self.backgroundDatabaseHousekeeperTaskIdentifier)
+        let databaseHousekeeperTask = BGProcessingTaskRequest(identifier: Self.backgroundDatabaseHousekeeperTaskIdentifier)
         databaseHousekeeperTask.earliestBeginDate = nil // Docs indicate nil = no start delay.
+        databaseHousekeeperTask.requiresNetworkConnectivity = false
         do {
             try BGTaskScheduler.shared.submit(databaseHousekeeperTask)
         } catch {

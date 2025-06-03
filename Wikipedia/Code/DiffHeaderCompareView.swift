@@ -95,7 +95,7 @@ class DiffHeaderCompareView: SetupView {
         return stackView
     }()
 
-    weak var delegate: DiffHeaderActionDelegate?
+    var tappedHeaderUsernameAction: ((Username, DiffHeaderUsernameDestination) -> Void)?
     private var viewModel: DiffHeaderCompareViewModel?
 
     override func setup() {
@@ -125,20 +125,6 @@ class DiffHeaderCompareView: SetupView {
         ])
 
         setupStackView()
-    }
-
-    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        let fromConvertedPoint = self.convert(point, to: fromMenuButton)
-        if fromMenuButton.point(inside: fromConvertedPoint, with: event) {
-            return true
-        }
-
-        let toConvertedPoint = self.convert(point, to: toMenuButton)
-        if toMenuButton.point(inside: toConvertedPoint, with: event) {
-            return true
-        }
-
-        return false
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -174,6 +160,7 @@ class DiffHeaderCompareView: SetupView {
 
     func update(_ viewModel: DiffHeaderCompareViewModel) {
         self.viewModel = viewModel
+        
         fromHeadingLabel.text = viewModel.fromModel.heading.localizedUppercase
         fromTimestampLabel.text = viewModel.fromModel.timestampString
 
@@ -195,6 +182,13 @@ class DiffHeaderCompareView: SetupView {
         } else {
             toDescriptionLabel.text = viewModel.toModel.summary
         }
+        
+        let defaultImage = UIImage(systemName: "person.fill")
+        let fromImage = viewModel.fromModel.isTemp ? WMFIcon.temp : defaultImage
+        let toImage = viewModel.toModel.isTemp ? WMFIcon.temp : defaultImage
+        
+        fromMenuButton.updateImage(fromImage)
+        toMenuButton.updateImage(toImage)
 
         updateFonts(with: traitCollection)
         updateAccessibilityLabels(viewModel: viewModel)
@@ -276,13 +270,13 @@ extension DiffHeaderCompareView: WMFSmallMenuButtonDelegate {
 
         if item == userButtonMenuItems[0] {
             WatchlistFunnel.shared.logDiffTapUserContributions(project: viewModel.project)
-            delegate?.tappedUsername(username: username, destination: .userContributions)
+            tappedHeaderUsernameAction?(username, .userContributions)
         } else if item == userButtonMenuItems[1] {
             WatchlistFunnel.shared.logDiffTapUserTalk(project: viewModel.project)
-            delegate?.tappedUsername(username: username, destination: .userTalkPage)
+            tappedHeaderUsernameAction?(username, .userTalkPage)
         } else if item == userButtonMenuItems[2] {
             WatchlistFunnel.shared.logDiffTapUserPage(project: viewModel.project)
-            delegate?.tappedUsername(username: username, destination: .userPage)
+            tappedHeaderUsernameAction?(username, .userPage)
         }
     }
     

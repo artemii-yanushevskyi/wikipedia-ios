@@ -1,19 +1,19 @@
 import WMF
 import CocoaLumberjackSwift
 import WMFComponents
+import WMFData
 
 public enum InputAccessoryViewType {
     case format
     case findInPage
 }
 
-class TalkPageViewController: ViewController {
+class TalkPageViewController: ThemeableViewController, WMFNavigationBarConfiguring {
 
     // MARK: - Properties
 
     let viewModel: TalkPageViewModel
     fileprivate var headerView: TalkPageHeaderView?
-    fileprivate var shouldGoToNewTopic: Bool = false
     let findInPageState = TalkPageFindInPageState()
 
     internal var preselectedTextRange = UITextRange()
@@ -50,12 +50,6 @@ class TalkPageViewController: ViewController {
             return textFormattingToolbarView
         }
     }
-
-    lazy private(set) var fakeProgressController: FakeProgressController = {
-        let progressController = FakeProgressController(progress: navigationBar, delegate: navigationBar)
-        progressController.delay = 0.0
-        return progressController
-    }()
     
     var scrollingToIndexPath: IndexPath?
     var scrollingToResult: TalkPageFindInPageSearchController.SearchResult?
@@ -166,7 +160,9 @@ class TalkPageViewController: ViewController {
 
     init(theme: Theme, viewModel: TalkPageViewModel) {
         self.viewModel = viewModel
-        super.init(theme: theme)
+        super.init(nibName: nil, bundle: nil)
+        self.theme = theme
+        hidesBottomBarWhenPushed = true
     }
     
     required init?(coder aDecoder: NSCoder) {
@@ -176,23 +172,18 @@ class TalkPageViewController: ViewController {
     override func loadView() {
         let talkPageView = TalkPageView(frame: UIScreen.main.bounds)
         view = talkPageView
-        scrollView = talkPageView.collectionView
     }
 
     fileprivate func fetchTalkPage() {
-        navigationBar.removeUnderNavigationBarView()
         self.headerView = nil
-        fakeProgressController.start()
         viewModel.fetchTalkPage { [weak self] result in
 
             guard let self = self else {
                 return
             }
 
-            self.fakeProgressController.stop()
             switch result {
             case .success:
-                self.setupHeaderView()
                 self.talkPageView.configure(viewModel: self.viewModel)
                 self.talkPageView.emptyView.actionButton.addTarget(self, action: #selector(self.userDidTapAddTopicButton), for: .primaryActionTriggered)
                 self.updateEmptyStateVisibility()
@@ -214,8 +205,6 @@ class TalkPageViewController: ViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        navigationItem.title = TalkPageLocalizedStrings.title
-
         setupOverflowMenu()
 
         talkPageView.collectionView.dataSource = self
@@ -223,12 +212,35 @@ class TalkPageViewController: ViewController {
 
         talkPageView.emptyView.scrollView.delegate = self
 
-        // Needed for reply compose views to display on top of navigation bar.
-        navigationController?.setNavigationBarHidden(true, animated: false)
-        navigationMode = .forceBar
-
         fetchTalkPage()
         setupToolbar()
+
+        Task {
+            self.viewModel.wikiHasTempAccounts = await checkWikiStatus()
+            replyComposeController.wikiHasTempAccounts = self.viewModel.wikiHasTempAccounts
+        }
+
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillChangeFrame(_:)), name: UIWindow.keyboardWillChangeFrameNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(didLogIn), name:WMFAuthenticationManager.didLogInNotification, object: nil)
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        configureNavigationBar()
+    }
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        
+        let headerViewHeight = self.headerView?.frame.height ?? 0
+        talkPageView.updateEmptyErrorViewsTopPadding(padding: headerViewHeight)
+    }
+    
+    private func configureNavigationBar() {
+        let titleConfig = WMFNavigationBarTitleConfig(title: TalkPageLocalizedStrings.title, customView: nil, alignment: .centerCompact)
+        
+        configureNavigationBar(titleConfig: titleConfig, closeButtonConfig: nil, profileButtonConfig: nil, tabsButtonConfig: nil, searchBarConfig: nil, hideNavigationBarOnScroll: false)
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -261,35 +273,58 @@ class TalkPageViewController: ViewController {
         fetchTalkPage()
     }
 
-    private func setupHeaderView() {
-        
-        if self.headerView != nil {
-            navigationBar.removeUnderNavigationBarView()
-            self.headerView = nil
-        }
-
-        let headerView = TalkPageHeaderView()
-        self.headerView = headerView
-
-        headerView.configure(viewModel: viewModel)
-        navigationBar.isBarHidingEnabled = false
-        navigationBar.isUnderBarViewHidingEnabled = true
-        navigationBar.allowsUnderbarHitsFallThrough = true
-        
-        navigationBar.addUnderNavigationBarView(headerView, shouldIgnoreSafeArea: true)
-        useNavigationBarVisibleHeightForScrollViewInsets = false
-        updateScrollViewInsets()
-        
-        headerView.apply(theme: theme)
-
-        headerView.coffeeRollReadMoreButton.addTarget(self, action: #selector(userDidTapCoffeeRollReadMoreButton), for: .primaryActionTriggered)
+    private func checkWikiStatus() async -> Bool? {
+        guard let languageCode = viewModel.siteURL.wmf_languageCode else { return false }
+        let dataController = WMFTempAccountDataController.shared
+        return await dataController.asyncCheckWikiTempAccountAvailability(language: languageCode, isCheckingPrimaryWiki: false)
     }
-    
+
     private func setupOverflowMenu() {
-        let rightBarButtonItem = UIBarButtonItem(image: UIImage(systemName: "ellipsis.circle"), primaryAction: nil, menu: overflowMenu)
+        let rightBarButtonItem = UIBarButtonItem(image: WMFSFSymbolIcon.for(symbol: .ellipsisCircle), primaryAction: nil, menu: overflowMenu)
         rightBarButtonItem.accessibilityLabel = Self.TalkPageLocalizedStrings.overflowMenuAccessibilityLabel
         navigationItem.rightBarButtonItem = rightBarButtonItem
         rightBarButtonItem.tintColor = theme.colors.link
+    }
+    
+    @objc private func didLogIn() {
+        if let replyComposeContentView = replyComposeController.contentView {
+            replyComposeContentView.ipTempButton.isHidden = true
+        } else if let topicComposeVC = self.topicComposeVC {
+            topicComposeVC.ipTempButton.isHidden = true
+        }
+    }
+    
+    // MARK: - Keyboard
+    
+    @objc func keyboardWillChangeFrame(_ notification: Notification) {
+        if let window = view.window, let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+            let windowFrame = window.convert(endFrame, from: nil)
+            keyboardFrame = window.convert(windowFrame, to: view)
+        }
+    }
+        
+    @objc func keyboardDidHide(_ notification: Notification) {
+        keyboardFrame = nil
+    }
+    
+    private(set) var keyboardFrame: CGRect? {
+        didSet {
+            keyboardDidChangeFrame(from: oldValue, newKeyboardFrame: keyboardFrame)
+        }
+    }
+    
+    func keyboardDidChangeFrame(from oldKeyboardFrame: CGRect?, newKeyboardFrame: CGRect?) {
+
+        guard oldKeyboardFrame != newKeyboardFrame else {
+            return
+        }
+        
+        replyComposeController.calculateLayout(in: self, newKeyboardFrame: newKeyboardFrame)
+        
+        view.setNeedsLayout()
+        UIView.animate(withDuration: 0.2) {
+            self.view.layoutIfNeeded()
+        }
     }
 
     // MARK: - Coffee Roll
@@ -307,7 +342,7 @@ class TalkPageViewController: ViewController {
             if let themeableVC = languageVC as Themeable? {
                 themeableVC.apply(theme: self.theme)
             }
-            present(WMFThemeableNavigationController(rootViewController: languageVC, theme: self.theme), animated: true, completion: nil)
+            present(WMFComponentNavigationController(rootViewController: languageVC, modalPresentationStyle: .overFullScreen), animated: true, completion: nil)
         } else if viewModel.pageType == .article {
             guard let languageCode  = viewModel.siteURL.wmf_languageCode else {
                 return
@@ -316,7 +351,8 @@ class TalkPageViewController: ViewController {
                 if let articleURL = viewModel.siteURL.wmf_URL(withTitle: articleTitle) {
                     let languageVC = WMFArticleLanguagesViewController(articleURL: articleURL)
                     languageVC.delegate = self
-                    present(WMFThemeableNavigationController(rootViewController: languageVC, theme: self.theme), animated: true, completion: nil)
+                    let navVC = WMFComponentNavigationController(rootViewController: languageVC, modalPresentationStyle: .overFullScreen)
+                    present(navVC, animated: true, completion: nil)
                 }
             }
         }
@@ -349,42 +385,8 @@ class TalkPageViewController: ViewController {
     // MARK: - Reply Compose Management
     
     let replyComposeController = TalkPageReplyComposeController()
-    
+
     private var isClosing: Bool = false
-    
-    override var keyboardIsIncludedInBottomContentInset: Bool {
-        if replyComposeController.isShowing {
-            return false
-        }
-
-        return true
-    }
-    
-    override var additionalBottomContentInset: CGFloat {
-
-        if let replyComposeView = replyComposeController.containerView {
-            return max(0, toolbar.frame.minY - replyComposeView.frame.minY)
-        } else if isShowingFindInPage {
-            return toolbar.frame.height
-        }
-
-        return 0
-    }
-    
-    override func keyboardDidChangeFrame(from oldKeyboardFrame: CGRect?, newKeyboardFrame: CGRect?) {
-        super.keyboardDidChangeFrame(from: oldKeyboardFrame, newKeyboardFrame: newKeyboardFrame)
-        
-        guard oldKeyboardFrame != newKeyboardFrame else {
-            return
-        }
-        
-        replyComposeController.calculateLayout(in: self, newKeyboardFrame: newKeyboardFrame)
-        
-        view.setNeedsLayout()
-        UIView.animate(withDuration: 0.2) {
-            self.view.layoutIfNeeded()
-        }
-    }
     
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
@@ -429,33 +431,105 @@ class TalkPageViewController: ViewController {
         if let lastViewDidAppearDate = lastViewDidAppearDate {
             TalkPagesFunnel.shared.logTappedNewTopic(routingSource: viewModel.source, project: viewModel.project, talkPageType: viewModel.pageType, lastViewDidAppearDate: lastViewDidAppearDate)
         }
-        let topicComposeViewModel = TalkPageTopicComposeViewModel(semanticContentAttribute: viewModel.semanticContentAttribute, siteURL: viewModel.siteURL, pageLink: viewModel.getTalkPageURL(encoded: false))
-        let topicComposeVC = TalkPageTopicComposeViewController(viewModel: topicComposeViewModel, authenticationManager: viewModel.authenticationManager, theme: theme)
+        let topicComposeViewModel = TalkPageTopicComposeViewModel(semanticContentAttribute: viewModel.semanticContentAttribute, siteURL: viewModel.siteURL, pageLink: viewModel.getTalkPageURL(encoded: false), wikiHasTempAccounts: viewModel.wikiHasTempAccounts)
+
+        let tappedIPTempButtonAction: () -> Void = { [weak self] in
+            self?.presentIPTempModalIfNeeded(dismissAction: {
+                // do nothing upon dismiss
+            })
+        }
+        
+        let topicComposeVC = TalkPageTopicComposeViewController(viewModel: topicComposeViewModel, authenticationManager: viewModel.authenticationManager, theme: theme, tappedIPTempButtonAction: tappedIPTempButtonAction)
         topicComposeVC.delegate = self
         inputAccessoryViewType = .format
         if let url = viewModel.getTalkPageURL(encoded: false) {
             EditAttemptFunnel.shared.logInit(pageURL: url)
         }
-        let navVC = UINavigationController(rootViewController: topicComposeVC)
-        navVC.modalPresentationStyle = .pageSheet
+        let navVC = WMFComponentNavigationController(rootViewController: topicComposeVC, modalPresentationStyle: .pageSheet)
         navVC.presentationController?.delegate = self
-        present(navVC, animated: true)
+        present(navVC, animated: true) { [weak self] in
+            self?.presentIPTempWarningToastIfNeeded()
+        }
     }
 
     @objc fileprivate func userDidTapAddTopicButton() {
-        if UserDefaults.standard.wmf_userHasOnboardedToContributingToTalkPages {
-            showAddTopic()
+        
+        let showAddTopicAction: () -> Void = { [weak self] in
+            self?.showAddTopic()
+            
+            if UIAccessibility.isVoiceOverRunning {
+                if let height = self?.replyComposeController.containerView?.frame.height, height >= 1.0 {
+                    UIAccessibility.post(notification: .screenChanged, argument: self?.replyComposeController.containerView)
+                }
+            }
+        }
+        
+        let presentNewTopicAction: () -> Void = { [weak self] in
+            if UserDefaults.standard.wmf_userHasOnboardedToContributingToTalkPages {
+                showAddTopicAction()
+            } else {
+                self?.presentTopicReplyOnboarding(dismissAction: showAddTopicAction)
+            }
+        }
+        
+        presentIPTempModalIfNeeded(dismissAction: presentNewTopicAction)
+    }
+    
+    private var topicComposeVC: TalkPageTopicComposeViewController? {
+        guard let presentedNavVC = presentedViewController as? UINavigationController else { return nil }
+        guard let topicComposeVC = presentedNavVC.viewControllers.first as? TalkPageTopicComposeViewController else { return nil }
+        
+        return topicComposeVC
+    }
+    
+    private var topicComposeNavVC: UINavigationController? {
+        guard let presentedNavVC = presentedViewController as? UINavigationController else { return nil }
+        guard presentedNavVC.viewControllers.first is TalkPageTopicComposeViewController else { return nil }
+        
+        return presentedNavVC
+    }
+    
+    private func presentIPTempModalIfNeeded(dismissAction: @escaping () -> Void) {
+        let navigationController = topicComposeNavVC ?? navigationController
+        if let navigationController, let wikiHasTempAccounts = viewModel.wikiHasTempAccounts, !viewModel.authenticationManager.authStateIsPermanent && wikiHasTempAccounts {
+            let tempAccountsCoordinator = TempAccountSheetCoordinator(
+                navigationController: navigationController,
+                theme: theme,
+                dataStore: viewModel.dataStore,
+                didTapDone: { [weak self] in
+                    let vcToDismiss = self?.topicComposeVC ?? self
+                    vcToDismiss?.dismiss(animated: true)
+            }, didTapContinue: { [weak self] in
+                    let vcToDismiss = self?.topicComposeVC ?? self
+                    vcToDismiss?.dismiss(animated: true, completion: {
+                        dismissAction()
+                    })
+                },
+                isTempAccount: viewModel.authenticationManager.authStateIsTemporary
+            )
+            
+            _ = tempAccountsCoordinator.start()
         } else {
-            shouldGoToNewTopic = true
-            presentTopicReplyOnboarding()
+            dismissAction()
         }
     }
     
+    private func presentIPTempWarningToastIfNeeded() {
+        if let wikiHasTempAccounts = viewModel.wikiHasTempAccounts, !viewModel.authenticationManager.authStateIsPermanent, wikiHasTempAccounts {
+            if viewModel.authenticationManager.authStateIsTemporary {
+                WMFAlertManager.sharedInstance.showBottomAlertWithMessage(CommonStrings.tempWarningTitle, subtitle: CommonStrings.tempWarningSubtitle(username: viewModel.authenticationManager.authStateTemporaryUsername ?? "*****"), buttonTitle: nil, image: WMFSFSymbolIcon.for(symbol: .exclamationMarkCircleFill), dismissPreviousAlerts: true)
+            } else {
+                WMFAlertManager.sharedInstance.showBottomWarningAlertWithMessage(CommonStrings.ipWarningTitle, subtitle: CommonStrings.ipWarningSubtitle,  buttonTitle: nil, image: WMFSFSymbolIcon.for(symbol: .exclamationMarkTriangleFill), dismissPreviousAlerts: true)
+            }
+        }
+    }
+    
+    private var flexibleSpaceToolbarItem: UIBarButtonItem {
+        return UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+    }
+    
     fileprivate func setupToolbar() {
-        enableToolbar()
-        setToolbarHidden(false, animated: false)
-        
-        toolbar.items = [shareButton,  .flexibleSpaceToolbar(), revisionButton, .flexibleSpaceToolbar(), findButton,.flexibleSpaceToolbar(), addTopicButton]
+        talkPageView.toolbar.items = [shareButton,  flexibleSpaceToolbarItem, revisionButton, flexibleSpaceToolbarItem, findButton,flexibleSpaceToolbarItem, addTopicButton]
         
         shareButton.accessibilityLabel = TalkPageLocalizedStrings.shareButtonAccesibilityLabel
         findButton.accessibilityLabel = TalkPageLocalizedStrings.findButtonAccesibilityLabel
@@ -472,23 +546,39 @@ class TalkPageViewController: ViewController {
     }
     
     fileprivate func pushToEditor() {
-        guard let pageURL = viewModel.siteURL.wmf_URL(withTitle: viewModel.pageTitle) else {
-            return
-        }
         
-        let dataStore = MWKDataStore.shared()
+        let pushToEditorAction: () -> Void = { [weak self] in
+            
+            guard let self else { return }
+            
+            guard let pageURL = viewModel.siteURL.wmf_URL(withTitle: viewModel.pageTitle) else {
+                return
+            }
+            
+            let dataStore = MWKDataStore.shared()
 
-        let editorViewController = EditorViewController(pageURL: pageURL, sectionID: nil, editFlow: .editorSavePreview, source: .talk, dataStore: dataStore, articleSelectedInfo: nil, editTag: .appTalkSource, delegate: self, theme: theme)
-        
-        let navigationController = WMFThemeableNavigationController(rootViewController: editorViewController, theme: theme)
-        navigationController.modalPresentationStyle = UIModalPresentationStyle.overCurrentContext
-        present(navigationController, animated: true)
-        
-        guard let url = viewModel.siteURL.wmf_URL(withTitle: viewModel.pageTitle) else {
-            return
+            let editorViewController = EditorViewController(pageURL: pageURL, sectionID: nil, editFlow: .editorSavePreview, source: .talk, dataStore: dataStore, articleSelectedInfo: nil, editTag: .appTalkSource, delegate: self, theme: theme)
+            
+            let navigationController = WMFComponentNavigationController(rootViewController: editorViewController, modalPresentationStyle: .overFullScreen)
+            present(navigationController, animated: true)
+            
+            guard let url = viewModel.siteURL.wmf_URL(withTitle: viewModel.pageTitle) else {
+                return
+            }
+            
+            EditAttemptFunnel.shared.logInit(pageURL: url)
         }
         
-        EditAttemptFunnel.shared.logInit(pageURL: url)
+        let presentOnboardingAction: () -> Void = { [weak self] in
+            if UserDefaults.standard.wmf_userHasOnboardedToContributingToTalkPages {
+                pushToEditorAction()
+            } else {
+                self?.presentTopicReplyOnboarding(dismissAction: pushToEditorAction)
+            }
+        }
+        
+        presentIPTempModalIfNeeded(dismissAction: presentOnboardingAction)
+        
     }
 
     fileprivate func pushToDesktopWeb() {
@@ -625,14 +715,54 @@ class TalkPageViewController: ViewController {
         }
     }
     
-    private func handleNewTopicOrCommentAlert(isNewTopic: Bool) {
+    var tempAccountsMediaWikiURL: String {
+        var languageCodeSuffix = ""
+        if let primaryAppLanguageCode = viewModel.languageLinkController.appLanguage?.languageCode {
+            languageCodeSuffix = "\(primaryAppLanguageCode)"
+        }
+        return "https://www.mediawiki.org/wiki/Special:MyLanguage/Help:Temporary_accounts?uselang=\(languageCodeSuffix)"
+    }
+    
+    private func handleNewTopicOrCommentAlert(isNewTopic: Bool, needsFollowupTempAccountToast: Bool) {
         let title = isNewTopic ? TalkPageLocalizedStrings.addedTopicAlertTitle : TalkPageLocalizedStrings.addedCommentAlertTitle
         let image = UIImage(systemName: "checkmark.circle.fill")
         
         if UIAccessibility.isVoiceOverRunning {
             UIAccessibility.post(notification: UIAccessibility.Notification.announcement, argument: title)
         } else {
-            WMFAlertManager.sharedInstance.showBottomAlertWithMessage(title, subtitle: nil, image: image, type: .normal, customTypeName: nil, dismissPreviousAlerts: true)
+            let tempAccountUsername = viewModel.authenticationManager.authStateTemporaryUsername
+            WMFAlertManager.sharedInstance.showBottomAlertWithMessage(
+                title,
+                subtitle: nil,
+                image: image,
+                type: .custom,
+                customTypeName: "edit-published",
+                dismissPreviousAlerts: true,
+                completion: {
+                    let title = CommonStrings.tempAccountCreatedToastTitle
+                    let subtitle = CommonStrings.tempAccountCreatedToastSubtitle(username: tempAccountUsername)
+                    let image = WMFIcon.temp
+                    if needsFollowupTempAccountToast {
+                        WMFAlertManager.sharedInstance.showBottomAlertWithMessage(
+                            title,
+                            subtitle: subtitle,
+                            image: image,
+                            type: .custom,
+                            customTypeName: "edit-published",
+                            dismissPreviousAlerts: true,
+                            buttonTitle: CommonStrings.learnMoreTitle(),
+                            buttonCallBack: {
+                                if let url = URL(string: self.tempAccountsMediaWikiURL) {
+                                    let config = SinglePageWebViewController.StandardConfig(url: url, useSimpleNavigationBar: true)
+                                    let webVC = SinglePageWebViewController(configType: .standard(config), theme: self.theme)
+                                    let newNavigationVC =
+                                    WMFComponentNavigationController(rootViewController: webVC, modalPresentationStyle: .formSheet)
+                                    self.present(newNavigationVC, animated: true)
+                                }
+                            }
+                        )
+                    }
+                })
         }
     }
     
@@ -662,9 +792,7 @@ class TalkPageViewController: ViewController {
         cellViewModel.isThreadExpanded = true
         talkPageView.collectionView.reloadData()
         
-        isProgramaticallyScrolling = true
         talkPageView.collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: false)
-        isProgramaticallyScrolling = false
         
         if let commentViewModel = commentViewModel {
             scrollToComment(commentViewModel: commentViewModel, animated: false)
@@ -852,6 +980,22 @@ extension TalkPageViewController: UICollectionViewDelegate, UICollectionViewData
 
         return cell
     }
+    
+    func collectionView(_ collectionView: UICollectionView, viewForSupplementaryElementOfKind kind: String, at indexPath: IndexPath) -> UICollectionReusableView {
+        guard indexPath.section == 0 else {
+            return UICollectionReusableView()
+        }
+        
+        if let headerView = collectionView.dequeueReusableSupplementaryView(ofKind: kind, withReuseIdentifier: TalkPageHeaderView.reuseIdentifier, for: indexPath) as? TalkPageHeaderView {
+            headerView.configure(viewModel: viewModel)
+            headerView.coffeeRollReadMoreButton.addTarget(self, action: #selector(userDidTapCoffeeRollReadMoreButton), for: .primaryActionTriggered)
+            headerView.apply(theme: theme)
+            self.headerView = headerView
+            return headerView
+        }
+        
+        return UICollectionReusableView()
+    }
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         guard let cell = collectionView.cellForItem(at: indexPath) as? TalkPageCell else {
@@ -918,8 +1062,6 @@ extension TalkPageViewController: TalkPageCellDelegate {
 
     fileprivate func updateEmptyStateVisibility() {
         talkPageView.updateEmptyView(visible: viewModel.topics.count == 0)
-        scrollView = viewModel.topics.count == 0 ? talkPageView.emptyView.scrollView : talkPageView.collectionView
-        updateScrollViewInsets()
     }
 
     fileprivate func updateErrorStateVisibility() {
@@ -936,20 +1078,38 @@ extension TalkPageViewController: TalkPageCellReplyDelegate {
         if let url = viewModel.getTalkPageURL(encoded: false) {
             EditAttemptFunnel.shared.logInit(pageURL: url)
         }
-
-        if !UserDefaults.standard.wmf_userHasOnboardedToContributingToTalkPages {
-            presentTopicReplyOnboarding()
+        
+        let showReplyComposeAction = { [weak self] in
+            guard let self else { return }
+            
+            replyComposeController.setupAndDisplay(in: self, commentViewModel: commentViewModel, authenticationManager: viewModel.authenticationManager, accessibilityFocusView: accessibilityFocusView)
+            
+            presentIPTempWarningToastIfNeeded()
         }
+
+        let presentOnboardingAction: () -> Void = { [weak self] in
+            if UserDefaults.standard.wmf_userHasOnboardedToContributingToTalkPages {
+                showReplyComposeAction()
+            } else {
+                self?.presentTopicReplyOnboarding(dismissAction: showReplyComposeAction)
+            }
+        }
+        
+        presentIPTempModalIfNeeded(dismissAction: presentOnboardingAction)
         
         if let lastViewDidAppearDate = lastViewDidAppearDate {
             TalkPagesFunnel.shared.logTappedInlineReply(routingSource: viewModel.source, project: viewModel.project, talkPageType: viewModel.pageType, lastViewDidAppearDate: lastViewDidAppearDate)
         }
-        
-        replyComposeController.setupAndDisplay(in: self, commentViewModel: commentViewModel, authenticationManager: viewModel.authenticationManager, accessibilityFocusView: accessibilityFocusView)
     }
 }
 
 extension TalkPageViewController: TalkPageReplyComposeDelegate {
+    func tappedIPTempButton() {
+        presentIPTempModalIfNeeded(dismissAction: {
+            // do nothing upon dismiss
+        })
+    }
+    
     func closeReplyView() {
         replyComposeController.closeAndReset { focusView in
             if UIAccessibility.isVoiceOverRunning {
@@ -962,6 +1122,13 @@ extension TalkPageViewController: TalkPageReplyComposeDelegate {
     }
     
     func tappedPublish(text: String, commentViewModel: TalkPageCellCommentViewModel) {
+        
+        var wasIP = false
+        if let wikiHasTempAccounts = viewModel.wikiHasTempAccounts, !viewModel.authenticationManager.authStateIsPermanent && wikiHasTempAccounts {
+            if !viewModel.authenticationManager.authStateIsTemporary {
+                wasIP = true
+            }
+        }
 
         if let talkPageURL = viewModel.getTalkPageURL(encoded: false) {
             EditAttemptFunnel.shared.logSaveAttempt(pageURL: talkPageURL)
@@ -985,24 +1152,32 @@ extension TalkPageViewController: TalkPageReplyComposeDelegate {
                 self.replyComposeController.closeAndReset()
                 
                 // Try to refresh page
-                self.fakeProgressController.start()
                 self.viewModel.fetchTalkPage { [weak self] result in
                     
-                    self?.fakeProgressController.stop()
+                    guard let self else { return }
+                    
                     switch result {
                     case .success(let revID):
-                        self?.updateEmptyStateVisibility()
-                        self?.talkPageView.collectionView.reloadData()
-                        self?.handleNewTopicOrCommentAlert(isNewTopic: false)
-                        if let talkPageURL = self?.viewModel.getTalkPageURL(encoded: false) {
+                        self.updateEmptyStateVisibility()
+                        self.talkPageView.collectionView.reloadData()
+                        
+                        var isTemp = false
+                        if let wikiHasTempAccounts = viewModel.wikiHasTempAccounts, !viewModel.authenticationManager.authStateIsPermanent && wikiHasTempAccounts {
+                            if viewModel.authenticationManager.authStateIsTemporary {
+                                isTemp = true
+                            }
+                        }
+                        
+                        self.handleNewTopicOrCommentAlert(isNewTopic: false, needsFollowupTempAccountToast: wasIP && isTemp)
+                        if let talkPageURL = self.viewModel.getTalkPageURL(encoded: false) {
                             EditAttemptFunnel.shared.logSaveSuccess(pageURL: talkPageURL, revisionId: revID)
                         }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            self?.scrollToNewComment(oldCellViewModel: oldCellViewModel, oldCommentViewModels: oldCommentViewModels)
+                            self.scrollToNewComment(oldCellViewModel: oldCellViewModel, oldCommentViewModels: oldCommentViewModels)
                         }
 
                     case .failure:
-                        if let talkPageURL = self?.viewModel.getTalkPageURL(encoded: false) {
+                        if let talkPageURL = self.viewModel.getTalkPageURL(encoded: false) {
                             EditAttemptFunnel.shared.logSaveFailure(pageURL: talkPageURL)
                         }
                     }
@@ -1044,24 +1219,41 @@ extension TalkPageViewController: TalkPageReplyComposeDelegate {
 extension TalkPageViewController: TalkPageTopicComposeViewControllerDelegate {
     func tappedPublish(topicTitle: String, topicBody: String, composeViewController: TalkPageTopicComposeViewController) {
         
+        var wasIP = false
+        if let wikiHasTempAccounts = viewModel.wikiHasTempAccounts, !viewModel.authenticationManager.authStateIsPermanent && wikiHasTempAccounts {
+            if !viewModel.authenticationManager.authStateIsTemporary {
+                wasIP = true
+            }
+        }
+        
         if let lastViewDidAppearDate = lastViewDidAppearDate {
             TalkPagesFunnel.shared.logTappedPublishNewTopicOrInlineReply(routingSource: viewModel.source, project: viewModel.project, talkPageType: viewModel.pageType, lastViewDidAppearDate: lastViewDidAppearDate)
         }
 
         viewModel.postTopic(topicTitle: topicTitle, topicBody: topicBody) { [weak self] result in
+            
+            guard let self else { return }
 
             switch result {
             case .success:
                 
-                composeViewController.dismiss(animated: true) {
-                    self?.handleNewTopicOrCommentAlert(isNewTopic: true)
+                composeViewController.dismiss(animated: true) { [weak self] in
+                    
+                    guard let self else { return }
+                    
+                    var isTemp = false
+                    if let wikiHasTempAccounts = viewModel.wikiHasTempAccounts, !viewModel.authenticationManager.authStateIsPermanent && wikiHasTempAccounts {
+                        if viewModel.authenticationManager.authStateIsTemporary {
+                            isTemp = true
+                        }
+                    }
+                    
+                    self.handleNewTopicOrCommentAlert(isNewTopic: true, needsFollowupTempAccountToast: wasIP && isTemp)
                 }
                 
                 // Try to refresh page
-                self?.fakeProgressController.start()
-                self?.viewModel.fetchTalkPage { [weak self] result in
+                self.viewModel.fetchTalkPage { [weak self] result in
                     
-                    self?.fakeProgressController.stop()
                     
                     switch result {
                     case .success:
@@ -1082,7 +1274,7 @@ extension TalkPageViewController: TalkPageTopicComposeViewControllerDelegate {
                 DDLogError("Failure publishing topic: \(error)")
                 composeViewController.setupNavigationBar(isPublishing: false)
 
-                if let viewModel = self?.viewModel, let pageURL = viewModel.getTalkPageURL(encoded: false) {
+                if let pageURL = viewModel.getTalkPageURL(encoded: false) {
                     EditAttemptFunnel.shared.logSaveFailure(pageURL: pageURL)
                 }
                 
@@ -1096,7 +1288,7 @@ extension TalkPageViewController: TalkPageTopicComposeViewControllerDelegate {
                         WMFAlertManager.sharedInstance.showErrorAlertWithMessage(title, subtitle: TalkPageLocalizedStrings.failureAlertSubtitle, buttonTitle: nil, image: UIImage(systemName: "exclamationmark.circle"), dismissPreviousAlerts: true)
                     }
                 } else {
-                    self?.showUnexpectedErrorAlert(on: composeViewController)
+                    self.showUnexpectedErrorAlert(on: composeViewController)
                 }
             }
         }
@@ -1105,8 +1297,7 @@ extension TalkPageViewController: TalkPageTopicComposeViewControllerDelegate {
 
 extension TalkPageViewController: UIAdaptivePresentationControllerDelegate {
     func presentationControllerShouldDismiss(_ presentationController: UIPresentationController) -> Bool {
-        guard let navVC = presentationController.presentingViewController as? UINavigationController,
-              let topicComposeVC = navVC.visibleViewController as? TalkPageTopicComposeViewController else {
+        guard let topicComposeVC = self.topicComposeVC else {
             return true
         }
 
@@ -1170,8 +1361,25 @@ extension TalkPageViewController: TalkPageTextViewLinkHandling {
             return
         }
         
-        let userInfo: [AnyHashable : Any] = [RoutingUserInfoKeys.source: RoutingUserInfoSourceValue.talkPage.rawValue]
-        navigate(to: url.absoluteURL, userInfo: userInfo)
+        let legacyNavigateAction = { [weak self] in
+            
+            guard let self else { return }
+            let userInfo: [AnyHashable : Any] = [RoutingUserInfoKeys.source: RoutingUserInfoSourceValue.talkPage.rawValue]
+            navigate(to: url.absoluteURL, userInfo: userInfo)
+        }
+        
+        // first try to navigate using LinkCoordinator. If it fails, use the legacy approach.
+        if let navigationController {
+            
+            let linkCoordinator = LinkCoordinator(navigationController: navigationController, url: url.absoluteURL, dataStore: nil, theme: theme, articleSource: .undefined)
+            let success = linkCoordinator.start()
+            guard success else {
+                legacyNavigateAction()
+                return
+            }
+        } else {
+            legacyNavigateAction()
+        }
     }
 }
 
@@ -1200,11 +1408,12 @@ extension TalkPageViewController: WMFPreferredLanguagesViewControllerDelegate {
     }
 }
 
-extension TalkPageViewController: TalkPageTopicReplyOnboardingDelegate {
+// MARK: Onboarding
+
+extension TalkPageViewController {
     
-    func presentTopicReplyOnboarding() {
-        let topicReplyOnboardingHostingViewController = TalkPageTopicReplyOnboardingHostingController(theme: theme)
-        topicReplyOnboardingHostingViewController.delegate = self
+    func presentTopicReplyOnboarding(dismissAction: @escaping () -> Void) {
+        let topicReplyOnboardingHostingViewController = TalkPageTopicReplyOnboardingHostingController(dismissAction: dismissAction, theme: theme)
         topicReplyOnboardingHostingViewController.modalPresentationStyle = .pageSheet
         self.topicReplyOnboardingHostingViewController = topicReplyOnboardingHostingViewController
         
@@ -1213,20 +1422,8 @@ extension TalkPageViewController: TalkPageTopicReplyOnboardingDelegate {
         }
         
         present(topicReplyOnboardingHostingViewController, animated: true)
-    }
-    
-    func userDidDismissTopicReplyOnboardingView() {
-        UserDefaults.standard.wmf_userHasOnboardedToContributingToTalkPages = true
         
-        if shouldGoToNewTopic {
-            showAddTopic()
-            shouldGoToNewTopic = false
-            if UIAccessibility.isVoiceOverRunning {
-                if let height = replyComposeController.containerView?.frame.height, height >= 1.0 {
-                    UIAccessibility.post(notification: .screenChanged, argument: replyComposeController.containerView)
-                }
-            }
-        }
+        UserDefaults.standard.wmf_userHasOnboardedToContributingToTalkPages = true
     }
 }
 
@@ -1239,7 +1436,7 @@ extension TalkPageViewController: EditorViewControllerDelegate {
         }
     }
     
-    func editorDidFinishEditing(_ editor: EditorViewController, result: Result<EditorChanges, Error>) {
+    func editorDidFinishEditing(_ editor: EditorViewController, result: Result<EditorChanges, Error>, needsNewTempAccountToast: Bool?) {
         switch result {
         case .failure(let error):
             showError(error)
@@ -1262,10 +1459,8 @@ extension TalkPageViewController: EditorViewControllerDelegate {
                 }
                 
                 // Refresh page
-                self.fakeProgressController.start()
                 self.viewModel.fetchTalkPage { [weak self] result in
                     
-                    self?.fakeProgressController.stop()
                     
                     switch result {
                     case .success:

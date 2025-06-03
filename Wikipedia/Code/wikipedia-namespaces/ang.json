@@ -1,5 +1,5 @@
 {
-  "mainpage" : "HĒAFODTRAMET",
+  "mainpage" : "HEAFODTRAMET",
   "namespace" : {
     "" : 0,
     "BILIÞ" : 6,
@@ -21,10 +21,6 @@
     "FLOCCGESPREC" : 15,
     "FLOCCMOTUNG" : 15,
     "FLOCCMŌTUNG" : 15,
-    "GADGET" : 2300,
-    "GADGET DEFINITION" : 2302,
-    "GADGET DEFINITION TALK" : 2303,
-    "GADGET TALK" : 2301,
     "GESPREC" : 1,
     "HELP" : 12,
     "HELP TALK" : 13,

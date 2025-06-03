@@ -1,5 +1,6 @@
 import Foundation
 import CocoaLumberjackSwift
+import WMFData
 
 public enum WMFCachePolicy {
     case foundation(URLRequest.CachePolicy)
@@ -87,14 +88,41 @@ public class Session: NSObject {
         return storage
     }()
     
+    public func hasCentralAuthUserCookie() -> Bool {
+        guard let storage = defaultURLSession.configuration.httpCookieStorage else {
+            return false
+        }
+        
+        guard let cookie = storage.cookieWithName("centralauth_User", for: Configuration.current.centralAuthCookieSourceDomain),
+              !cookie.value.isEmpty else {
+            return false
+        }
+        
+        return true
+    }
+    
+    public func getCentralAuthUserCookie() -> String? {
+        guard let storage = defaultURLSession.configuration.httpCookieStorage else {
+            return nil
+        }
+        
+        guard let cookie = storage.cookieWithName("centralauth_User", for: Configuration.current.centralAuthCookieSourceDomain),
+              !cookie.value.isEmpty else {
+            return nil
+        }
+        
+        return cookie.value
+    }
+    
     public func cloneCentralAuthCookies() {
         // centralauth_ cookies work for any central auth domain - this call copies the centralauth_* cookies from .wikipedia.org to an explicit list of domains. This is  hardcoded because we only want to copy ".wikipedia.org" cookies regardless of WMFDefaultSiteDomain
         defaultURLSession.configuration.httpCookieStorage?.copyCookiesWithNamePrefix("centralauth_", for: configuration.centralAuthCookieSourceDomain, to: configuration.centralAuthCookieTargetDomains)
-        cacheQueue.async(flags: .barrier) {
-            self._isAuthenticated = nil
-        }
     }
-    
+
+    public func injectEmailAuthCookie() {
+        defaultURLSession.configuration.httpCookieStorage?.injectEmailAuthCookie(domain: Configuration.current.centralAuthCookieSourceDomain)
+    }
+
     @objc public func removeAllCookies() {
         guard let storage = defaultURLSession.configuration.httpCookieStorage else {
             return
@@ -104,10 +132,23 @@ public class Session: NSObject {
         storage.cookies?.forEach { cookie in
             storage.deleteCookie(cookie)
         }
-        
-        cacheQueue.async(flags: .barrier) {
-            self._isAuthenticated = nil
+    }
+    
+    public func hasValidCentralAuthCookies(for domain: String) -> Bool {
+        guard let storage = defaultURLSession.configuration.httpCookieStorage else {
+            return false
         }
+        let cookies = storage.cookiesWithNamePrefix("centralauth_", for: domain)
+        guard !cookies.isEmpty else {
+            return false
+        }
+        let now = Date()
+        for cookie in cookies {
+            if let cookieExpirationDate = cookie.expiresDate, cookieExpirationDate < now {
+                return false
+            }
+        }
+        return true
     }
     
     @objc public func clearTemporaryCache() {
@@ -161,40 +202,6 @@ public class Session: NSObject {
         return URLSession(configuration: config)
     }()
     
-    public func hasValidCentralAuthCookies(for domain: String) -> Bool {
-        guard let storage = defaultURLSession.configuration.httpCookieStorage else {
-            return false
-        }
-        let cookies = storage.cookiesWithNamePrefix("centralauth_", for: domain)
-        guard !cookies.isEmpty else {
-            return false
-        }
-        let now = Date()
-        for cookie in cookies {
-            if let cookieExpirationDate = cookie.expiresDate, cookieExpirationDate < now {
-                return false
-            }
-        }
-        return true
-    }
-
-    private var cacheQueue = DispatchQueue(label: "session-cache-queue", qos: .default, attributes: [.concurrent], autoreleaseFrequency: .workItem, target: nil)
-    private var _isAuthenticated: Bool?
-    @objc public var isAuthenticated: Bool {
-        var read: Bool?
-        cacheQueue.sync {
-            read = _isAuthenticated
-        }
-        if let auth = read {
-            return auth
-        }
-        let hasValid = hasValidCentralAuthCookies(for: configuration.centralAuthCookieSourceDomain)
-        cacheQueue.async(flags: .barrier) {
-            self._isAuthenticated = hasValid
-        }
-        return hasValid
-    }
-    
     @objc(requestToGetURL:)
     public func request(toGET requestURL: URL?) -> URLRequest? {
         guard let requestURL = requestURL else {
@@ -210,12 +217,23 @@ public class Session: NSObject {
         if let cachePolicy = cachePolicy {
             request.cachePolicy = cachePolicy
         }
-        let defaultHeaders = [
+        var defaultHeaders: [String: String] = [
             "Accept": "application/json; charset=utf-8",
             "Accept-Encoding": "gzip",
-            "User-Agent": WikipediaAppUtils.versionedUserAgent(),
-            "Accept-Language": requestURL.wmf_languageVariantCode ?? Locale.acceptLanguageHeaderForPreferredLanguages
+            "Accept-Language": requestURL.wmf_languageVariantCode ?? Locale.acceptLanguageHeaderForPreferredLanguages,
+            "User-Agent": WikipediaAppUtils.versionedUserAgent()
         ]
+
+        var isLoginAction = requestURL.absoluteString.contains("action=clientlogin")
+        if let bodyParamsDict = bodyParameters as? [String: Any] {
+            if let actionValue = bodyParamsDict["action"] as? String {
+                isLoginAction = actionValue.lowercased() == "clientlogin"
+            }
+        }
+        if WMFDeveloperSettingsDataController.shared.forceEmailAuth && isLoginAction {
+            defaultHeaders.removeValue(forKey: "User-Agent")
+        }
+
         for (key, value) in defaultHeaders {
             guard headers[key] == nil else {
                 continue
@@ -271,29 +289,6 @@ public class Session: NSObject {
     }
     
     public func dataTask(with request: URLRequest, callback: Callback) -> URLSessionTask? {
-        
-        // odd workaround to show an article as living doc icons in the article content web view.
-        let botIconName = ArticleAsLivingDocViewModel.Event.Large.botIconName
-        if let url = request.url,
-           url.absoluteString.contains(botIconName),
-           let imageData = UIImage(named: botIconName)?.pngData() {
-            let response = URLResponse(url: url, mimeType: "image/png", expectedContentLength: imageData.count, textEncodingName: nil)
-            callback.response?(response)
-            callback.data?(imageData)
-            callback.success(false)
-            return nil
-        }
-
-        let anonIconName = ArticleAsLivingDocViewModel.Event.Large.anonymousIconName
-        if let url = request.url,
-           url.absoluteString.contains(anonIconName),
-           let imageData = UIImage(named: anonIconName)?.pngData() {
-            let response = URLResponse(url: url, mimeType: "image/png", expectedContentLength: imageData.count, textEncodingName: nil)
-            callback.response?(response)
-            callback.data?(imageData)
-            callback.success(false)
-            return nil
-        }
         
         if request.cachePolicy == .returnCacheDataElseLoad,
             let cachedResponse = permanentCache?.urlCache.cachedResponse(for: request) {

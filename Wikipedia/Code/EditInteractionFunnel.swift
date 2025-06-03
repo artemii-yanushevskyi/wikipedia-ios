@@ -29,10 +29,9 @@ final class EditInteractionFunnel {
         case articleEditPreview = "article_edit_preview"
         case articleEditSummary = "article_edit_summary"
         case talkEditSummary = "talk_edit_summary"
-        
-        // Alt-Text-Experiment Items
-        case altTextEditingOnboarding = "alt_text_editing_onboarding"
-        case altTextEditingInterface = "alt_text_editing_interface"
+        case activityEntry = "activity_entry"
+        case activityTab = "activity_tab"
+        case activityFeedback = "activity_feedback"
     }
     
     private enum Action: String {
@@ -47,19 +46,18 @@ final class EditInteractionFunnel {
         case saveAttempt = "save_attempt"
         case saveSuccess = "save_success"
         case saveFailure = "save_failure"
-        
-        // Alt-Text-Experiment Items
-        case groupAssignment = "group_assignment"
-        case launchImpression = "launch_impression"
-        case launchCloseClick = "launch_close_click"
-        case addClick = "add_click"
-        case doNotAddClick = "do_not_add_click"
-        case addAltTextImpression = "add_alt_text_impression"
-        case addAltTextInput = "add_alt_text_input"
-        case altTextEditSuccess = "alt_text_edit_success"
-        case minimizedImpression = "minimized_impression"
+        case launch = "launch"
+        case impression = "impression"
+        case loginClick = "login_click"
+        case viewClick = "view_click"
+        case viewHistoryClick = "view_history_click"
+        case viewSavedClick = "view_saved_click"
+        case viewEditedClick = "view_edited_click"
+        case feedbackImpression = "feedback_impression"
+        case feedbackCloseClick = "feedback_close_click"
+        case feedbackSubmitClick = "feedback_submit_click"
     }
-    
+
     private struct Event: EventInterface {
         static let schema: EventPlatformClient.Schema = .appInteraction
         let activeInterface: String?
@@ -77,7 +75,7 @@ final class EditInteractionFunnel {
         }
     }
    
-    private func logEvent(activeInterface: ActiveInterface, action: Action, actionData: [String: String]? = nil, project: WikimediaProject) {
+    private func logEvent(activeInterface: ActiveInterface?, action: Action, actionData: [String: String]? = nil, project: WikimediaProject) {
         
         var actionDataString: String? = nil
         if let actionData {
@@ -93,7 +91,7 @@ final class EditInteractionFunnel {
             }
         }
         
-        let event: EditInteractionFunnel.Event = EditInteractionFunnel.Event(activeInterface: activeInterface.rawValue, action: action.rawValue, actionData: actionDataString, platform: "ios", wikiID: project.notificationsApiWikiIdentifier)
+        let event: EditInteractionFunnel.Event = EditInteractionFunnel.Event(activeInterface: activeInterface?.rawValue, action: action.rawValue, actionData: actionDataString, platform: "ios", wikiID: project.notificationsApiWikiIdentifier)
         EventPlatformClient.shared.submit(stream: .editInteraction, event: event)
     }
     
@@ -253,89 +251,83 @@ final class EditInteractionFunnel {
         logEvent(activeInterface: .talkEditSummary, action: .editCancel, actionData: actionData, project: project)
     }
     
-    // MARK: Alt-Text-Experiment
+    // MARK: - Activity Tab Events
     
-    func logAltTextDidAssignImageRecsGroup(project: WikimediaProject) {
+    func logActivityTabGroupAssignment(project: WikimediaProject) {
         
-        guard let group = WMFAltTextDataController.shared?.assignedAltTextImageRecommendationsGroupForLogging() else {
+        guard let groupAssignment = try? WMFActivityTabExperimentsDataController.shared?.getActivityTabExperimentAssignment() else {
             return
         }
         
+        let groupAssignmentString: String
+        switch groupAssignment {
+        case .control: groupAssignmentString = "activity_a"
+        case .genericCTA: groupAssignmentString = "activity_b"
+        case .suggestedEdit: groupAssignmentString = "activity_c"
+        }
+        
+        logEvent(activeInterface: nil, action: .launch, actionData:["group": groupAssignmentString], project: project)
+    }
+    
+    func logActivityTabLoggedOutDidAppear(project: WikimediaProject) {
+        logEvent(activeInterface: .activityEntry, action: .impression, actionData: nil, project: project)
+    }
+    
+    func logActivityTabDidAppear(project: WikimediaProject) {
+        logEvent(activeInterface: .activityTab, action: .impression, actionData: nil, project: project)
+    }
+    
+    func logActivityTabLoggedOutDidTapLogin(project: WikimediaProject) {
+        logEvent(activeInterface: .activityEntry, action: .loginClick, actionData: nil, project: project)
+    }
+    
+    func logActivityTabLoggedOutDidTapViewReadingHistory(project: WikimediaProject) {
+        logEvent(activeInterface: .activityEntry, action: .viewClick, actionData: nil, project: project)
+    }
+    
+    func logActivityTabDidTapViewReadingHistory(project: WikimediaProject) {
+        logEvent(activeInterface: .activityTab, action: .viewHistoryClick, actionData: nil, project: project)
+    }
+    
+    func logActivityTabDidTapEditEmptyCapsule(project: WikimediaProject) {
+        logEvent(activeInterface: .activityTab, action: .editEntryClick, actionData: nil, project: project)
+    }
+    
+    func logActivityTabDidTapEditPopulatedCapsule(project: WikimediaProject) {
+        logEvent(activeInterface: .activityTab, action: .viewEditedClick, actionData: nil, project: project)
+    }
+    
+    func logActivityTabDidTapSavedCapsule(project: WikimediaProject) {
+        logEvent(activeInterface: .activityTab, action: .viewSavedClick, actionData: nil, project: project)
+    }
+    
+    func logActivityTabSurveyDidAppear(project: WikimediaProject) {
+        logEvent(activeInterface: .activityFeedback, action: .feedbackImpression, actionData: nil, project: project)
+    }
+    
+    func logActivityTabSurveyDidTapCancel(project: WikimediaProject) {
+        logEvent(activeInterface: .activityFeedback, action: .feedbackCloseClick, actionData: nil, project: project)
+    }
+    
+    func logActivityTabSurveyDidTapSubmit(options: [String], otherText: String?, project: WikimediaProject) {
         var actionData: [String: String] = [:]
-        switch group {
-        case "A":
-            actionData["exp_b_group"] = "a"
-        case "B":
-            actionData["exp_b_group"] = "b"
-        default:
-            assertionFailure("Unexpected experiment group")
+        
+        let trimmedOptions = options.filter { $0 != "other" }
+        
+        // todo: confirm commas don't get cut off
+        let feedbackSelect = trimmedOptions.joined(separator: ",")
+        actionData["feedback_select"] = feedbackSelect
+        if let otherText,
+           !otherText.isEmpty {
+            actionData["feedback_text"] = otherText
         }
-        
-        logEvent(activeInterface: .altTextEditingOnboarding, action: .groupAssignment, actionData: actionData, project: project)
+        logEvent(activeInterface: .activityFeedback, action: .feedbackSubmitClick, actionData: actionData, project: project)
     }
     
-    func logAltTextDidAssignArticleEditorGroup(project: WikimediaProject) {
-        
-        guard let group = WMFAltTextDataController.shared?.assignedAltTextArticleEditorGroupForLogging() else {
-            return
-        }
-        
-        var actionData: [String: String] = [:]
-        switch group {
-        case "C":
-            actionData["exp_c_group"] = "c"
-        case "D":
-            actionData["exp_c_group"] = "d"
-        default:
-            assertionFailure("Unexpected experiment group")
-        }
-        
-        logEvent(activeInterface: .altTextEditingOnboarding, action: .groupAssignment, actionData: actionData, project: project)
-    }
-    
-    func logAltTextPromptDidAppear(project: WikimediaProject) {
-        logEvent(activeInterface: .altTextEditingOnboarding, action: .launchImpression, project: project)
-    }
-    
-    func logAltTextPromptDidTapClose(project: WikimediaProject) {
-        logEvent(activeInterface: .altTextEditingOnboarding, action: .launchCloseClick, project: project)
-    }
-    
-    func logAltTextPromptDidTapAdd(project: WikimediaProject) {
-        logEvent(activeInterface: .altTextEditingOnboarding, action: .addClick, project: project)
-    }
-    
-    func logAltTextPromptDidTapDoNotAdd(project: WikimediaProject) {
-        logEvent(activeInterface: .altTextEditingOnboarding, action: .doNotAddClick, project: project)
-    }
-    
-    func logAltTextInputDidAppear(project: WikimediaProject) {
-        logEvent(activeInterface: .altTextEditingInterface, action: .addAltTextImpression, project: project)
-    }
-    
-    func logAltTextInputDidFocus(project: WikimediaProject) {
-        logEvent(activeInterface: .altTextEditingInterface, action: .addAltTextInput, project: project)
-    }
-    
-    func logAltTextInputDidMinimize(project: WikimediaProject) {
-        logEvent(activeInterface: .altTextEditingInterface, action: .minimizedImpression, project: project)
-    }
-    
-    func logAltTextDidSuccessfullyPostEdit(timeSpent: Int, revisionID: UInt64, altText: String, articleTitle: String, image: String, username: String, userEditCount: UInt64, registrationDate: String?, project: WikimediaProject) {
-        
-        var actionData = ["time_spent": String(timeSpent),
-                          "revision_id": String(revisionID),
-                          "alt_text": altText,
-                          "article_title": articleTitle,
-                          "image": image,
-                          "username": username,
-                          "event_user_revision_count": String(userEditCount)]
-        
-        if let registrationDate {
-            actionData["user_create_date"] = registrationDate
-        }
-        
-        logEvent(activeInterface: .altTextEditingInterface, action: .altTextEditSuccess, actionData: actionData, project: project)
+    func logActivityTabImageRecsPublishSuccess(revisionID: Int, project: WikimediaProject) {
+        let actionData = ["revision_id": String(revisionID),
+                          "image_add": String("true")]
+        logEvent(activeInterface: .activityTab, action: .saveSuccess, actionData: actionData, project: project)
     }
 }
 

@@ -48,6 +48,7 @@ NSString *const WMFReferenceLinkTappedNotification = @"WMFReferenceLinkTappedNot
     [self applyTheme:self.theme];
 
     self.closeButton.accessibilityLabel = [WMFCommonStrings closeButtonAccessibilityLabel];
+    [self.closeButton setTitle:WMFCommonStrings.doneTitle forState:UIControlStateNormal];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -142,13 +143,13 @@ NSString *const WMFReferenceLinkTappedNotification = @"WMFReferenceLinkTappedNot
 
     self.horizontalSeparatorHeightConstraint.constant = 1.f / [UIScreen mainScreen].scale;
 
-    self.closeButton.tintColor = theme.colors.border;
+    self.closeButton.tintColor = theme.colors.link;
 
     self.titleLabel.textColor = theme.colors.secondaryText;
 
     self.titleLabel.attributedText =
         [[WMFLocalizedStringWithDefaultValue(@"reference-title", nil, nil, @"Reference %1$@", @"Title shown above reference/citation popover. %1$@ is replaced with the reference link text - i.e. '[1]' {{Identical|Reference}}") uppercaseStringWithLocale:[NSLocale currentLocale]]
-         attributedStringWithAttributes:@{NSFontAttributeName: [WKFontWrapper fontFor:WMFFontsCaption1 compatibleWithTraitCollection: self.traitCollection]}
+         attributedStringWithAttributes:@{NSFontAttributeName: [WMFFontWrapper fontFor:WMFFontsCaption1 compatibleWithTraitCollection: self.traitCollection]}
                        substitutionStrings:@[self.reference.text]
                     substitutionAttributes:@[@{NSForegroundColorAttributeName: theme.colors.primaryText}]];
 }

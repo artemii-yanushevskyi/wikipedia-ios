@@ -8,10 +8,9 @@ public class WMFImageRecommendationsDataController {
 	struct OnboardingStatus: Codable {
 		var hasPresentedOnboardingModal: Bool
         var hasPresentedOnboardingTooltips: Bool
-        var hasPresentedFeatureAnnouncementModal: Bool
 
 		static var `default`: OnboardingStatus {
-            return OnboardingStatus(hasPresentedOnboardingModal: false, hasPresentedOnboardingTooltips: false, hasPresentedFeatureAnnouncementModal: false)
+            return OnboardingStatus(hasPresentedOnboardingModal: false, hasPresentedOnboardingTooltips: false)
 		}
 	}
 
@@ -48,16 +47,6 @@ public class WMFImageRecommendationsDataController {
         } set {
             var currentOnboardingStatus = onboardingStatus
             currentOnboardingStatus.hasPresentedOnboardingTooltips = newValue
-            try? userDefaultsStore?.save(key: WMFUserDefaultsKey.imageRecommendationsOnboarding.rawValue, value: currentOnboardingStatus)
-        }
-    }
-
-    public var hasPresentedFeatureAnnouncementModal: Bool {
-        get {
-            return onboardingStatus.hasPresentedFeatureAnnouncementModal
-        } set {
-            var currentOnboardingStatus = onboardingStatus
-            currentOnboardingStatus.hasPresentedFeatureAnnouncementModal = newValue
             try? userDefaultsStore?.save(key: WMFUserDefaultsKey.imageRecommendationsOnboarding.rawValue, value: currentOnboardingStatus)
         }
     }
@@ -102,5 +91,4 @@ public class WMFImageRecommendationsDataController {
         
         service.perform(request: request, completion: completion)
     }
-
 }

@@ -155,11 +155,14 @@ private class FeedCard: ExploreFeedSettingsItem {
 }
 
 @objc(WMFExploreFeedSettingsViewController)
-class ExploreFeedSettingsViewController: BaseExploreFeedSettingsViewController {
+class ExploreFeedSettingsViewController: BaseExploreFeedSettingsViewController, WMFNavigationBarConfiguring {
+    
+    public var showCloseButton = false
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         tableView.reloadData()
+        configureNavigationBar()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -169,21 +172,21 @@ class ExploreFeedSettingsViewController: BaseExploreFeedSettingsViewController {
         }
     }
 
-    public var showCloseButton = false {
-        didSet {
-            if showCloseButton {
-                navigationItem.leftBarButtonItem = UIBarButtonItem.wmf_buttonType(.X, target: self, action: #selector(closeButtonPressed))
-            } else {
-                navigationItem.leftBarButtonItem = nil
-            }
-        }
-    }
-
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = CommonStrings.exploreFeedTitle
         assert(!preferredLanguages.isEmpty)
         displayType = preferredLanguages.count == 1 ? .singleLanguage : .multipleLanguages
+    }
+    
+    private func configureNavigationBar() {
+        let titleConfig = WMFNavigationBarTitleConfig(title: CommonStrings.exploreFeedTitle, customView: nil, alignment: .centerCompact)
+        var closeConfig: WMFNavigationBarCloseButtonConfig? = nil
+        
+        if showCloseButton {
+            closeConfig = WMFNavigationBarCloseButtonConfig(text: CommonStrings.doneTitle, target: self, action: #selector(closeButtonPressed), alignment: .leading)
+        }
+        
+        configureNavigationBar(titleConfig: titleConfig, closeButtonConfig: closeConfig, profileButtonConfig: nil, tabsButtonConfig: nil, searchBarConfig: nil, hideNavigationBarOnScroll: false)
     }
 
     @objc private func closeButtonPressed() {
@@ -191,19 +194,12 @@ class ExploreFeedSettingsViewController: BaseExploreFeedSettingsViewController {
     }
 
     var editCount: Int {
-        var count: Int = 0
-        if let language = self.dataStore?.languageLinkController.appLanguage?.siteURL {
-            self.dataStore?.authenticationManager.getLoggedInUser(for: language, completion: { result in
-                switch result {
-                case .success(let user):
-                    count = Int(user?.editCount ?? 0)
-                default:
-                    break
-                }
-            })
+        guard let siteURL = self.dataStore?.languageLinkController.appLanguage?.siteURL,
+        let editCount = self.dataStore?.authenticationManager.permanentUser(siteURL: siteURL)?.editCount else {
+            return 0
         }
-
-        return count
+        
+        return Int(editCount)
     }
 
     // MARK: Items
@@ -225,48 +221,13 @@ class ExploreFeedSettingsViewController: BaseExploreFeedSettingsViewController {
 
             let shouldShowSuggestedEdits = !UIAccessibility.isVoiceOverRunning && editCount >= 50
 
-            if shouldShowSuggestedEdits || self.shouldEnableForAltTextExperiment() {
+            if shouldShowSuggestedEdits {
                 feedCards.append(suggestedEditsOption)
             }
 
         return feedCards
 
     }()
-
-    private func shouldEnableForAltTextExperiment() -> Bool {
-        let altTextDevSettingsFeatureFlag = WMFDeveloperSettingsDataController.shared.enableAltTextExperiment
-        let altTextDevSettingsFeatureFlagForEN = WMFDeveloperSettingsDataController.shared.enableAltTextExperimentForEN
-        let targetWikisForAltText = altTextDevSettingsFeatureFlagForEN ? ["es", "fr", "pt", "zh", "en"] : ["es", "fr", "pt", "zh"]
-        let language = self.dataStore?.languageLinkController.appLanguage?.languageCode ?? String()
-
-        if #available(iOS 16, *) {
-            if let isUserLoggedIn = dataStore?.authenticationManager.isLoggedIn {
-                return isUserLoggedIn && altTextDevSettingsFeatureFlag && targetWikisForAltText.contains(language) && !UIAccessibility.isVoiceOverRunning && UIDevice.current.userInterfaceIdiom == .phone
-                && shouldAltTextExperimentBeActive()
-            }
-        }
-        return false
-    }
-
-    func shouldAltTextExperimentBeActive() -> Bool {
-        var dateComponents = DateComponents()
-        dateComponents.year = 2024
-        dateComponents.month = 10
-        dateComponents.day = 21
-
-        let calendar = Calendar(identifier: .gregorian)
-        guard let experimentDate = calendar.date(from: dateComponents) else {
-            return false
-        }
-
-        let currentDate = Date()
-
-        if currentDate > experimentDate {
-            return false
-        }
-
-        return true
-    }
 
     private lazy var globalCards: ExploreFeedSettingsGlobalCards = {
         return ExploreFeedSettingsGlobalCards()

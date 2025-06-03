@@ -1,9 +1,11 @@
 import WMF
+import WMFData
 import WMFComponents
 
 protocol EditorNavigationItemControllerDelegate: AnyObject {
     func editorNavigationItemController(_ editorNavigationItemController: EditorNavigationItemController, didTapProgressButton progressButton: UIBarButtonItem)
-    func editorNavigationItemController(_ editorNavigationItemController: EditorNavigationItemController, didTapCloseButton closeButton: UIBarButtonItem)
+    func editorNavigationItemController(_ editorNavigationItemController: EditorNavigationItemController, didTapTemporaryAccountNoticesButton: UIBarButtonItem)
+    func editorNavigationItemController(_ editorNavigationItemController: EditorNavigationItemController, didTapIPAccountNoticesButton: UIBarButtonItem)
     func editorNavigationItemController(_ editorNavigationItemController: EditorNavigationItemController, didTapUndoButton undoButton: UIBarButtonItem)
     func editorNavigationItemController(_ editorNavigationItemController: EditorNavigationItemController, didTapRedoButton redoButton: UIBarButtonItem)
     func editorNavigationItemController(_ editorNavigationItemController: EditorNavigationItemController, didTapReadingThemesControlsButton readingThemesControlsButton: UIBarButtonItem)
@@ -12,34 +14,35 @@ protocol EditorNavigationItemControllerDelegate: AnyObject {
 
 class EditorNavigationItemController: NSObject, Themeable {
     weak var navigationItem: UINavigationItem?
+    
+    let dataStore: MWKDataStore
+    
+    internal var authManager: WMFAuthenticationManager {
+       return dataStore.authenticationManager
+   }
 
     var readingThemesControlsToolbarItem: UIBarButtonItem {
         return readingThemesControlsButton
     }
 
-    init(navigationItem: UINavigationItem) {
+    init(navigationItem: UINavigationItem, dataStore: MWKDataStore) {
         self.navigationItem = navigationItem
+        self.dataStore = dataStore
         super.init()
         configureNavigationButtonItems()
     }
 
     func apply(theme: Theme) {
-        closeButton.tintColor = theme.colors.chromeText
         undoButton.tintColor = theme.colors.inputAccessoryButtonTint
         redoButton.tintColor = theme.colors.inputAccessoryButtonTint
+        editNoticesButton.tintColor = theme.colors.diffCompareAccent
+        activeTemporaryAccountNoticesButton.tintColor = theme.colors.inputAccessoryButtonTint
+        temporaryAccountNoticesButton.tintColor = theme.colors.destructive
         readingThemesControlsButton.tintColor = theme.colors.inputAccessoryButtonTint
-        editNoticesButton.tintColor = theme.colors.inputAccessoryButtonTint
         (separatorButton.customView as? UIImageView)?.tintColor = theme.colors.newBorder
-        progressButton.tintColor = theme.colors.link
     }
 
     weak var delegate: EditorNavigationItemControllerDelegate?
-    
-    private(set) lazy var closeButton: UIBarButtonItem = {
-        let closeButton = UIBarButtonItem(image: WMFSFSymbolIcon.for(symbol: .close), style: .plain, target: self, action: #selector(close(_ :)))
-        closeButton.accessibilityLabel = CommonStrings.closeButtonAccessibilityLabel
-        return closeButton
-    }()
 
     private(set) lazy var progressButton: UIBarButtonItem = {
         let button = UIBarButtonItem(title: CommonStrings.nextTitle, style: .done, target: self, action: #selector(progress(_:)))
@@ -59,8 +62,20 @@ class EditorNavigationItemController: NSObject, Themeable {
     }()
 
     private lazy var editNoticesButton: UIBarButtonItem = {
-        let button = UIBarButtonItem(image: WMFSFSymbolIcon.for(symbol: .exclamationMarkCircleFill), style: .plain, target: self, action: #selector(editNotices(_ :)))
+        let button = UIBarButtonItem(image: WMFSFSymbolIcon.for(symbol: .exclamationMarkCircleFill), style: .plain, target: self, action: #selector(editNotices(_:)))
         button.accessibilityLabel = CommonStrings.editNotices
+        return button
+    }()
+    
+    private lazy var activeTemporaryAccountNoticesButton: UIBarButtonItem = {
+        let button = UIBarButtonItem(image: WMFIcon.temp, style: .plain, target: self, action: #selector(temporaryAccount(_ :)))
+        button.accessibilityLabel = WMFLocalizedString("edit-sheet-temp-account-notice", value: "Temporary Account Notice", comment: "Temporary account sheet for editors")
+        return button
+    }()
+    
+    private lazy var temporaryAccountNoticesButton: UIBarButtonItem = {
+        let button = UIBarButtonItem(image: WMFSFSymbolIcon.for(symbol: .temporaryAccountIcon), style: .plain, target: self, action: #selector(ipAccount(_ :)))
+        button.accessibilityLabel = WMFLocalizedString("edit-sheet-ip-account-notice", value: "IP Account Notice", comment: "Temporary account sheet for editors")
         return button
     }()
     
@@ -82,9 +97,13 @@ class EditorNavigationItemController: NSObject, Themeable {
     @objc private func progress(_ sender: UIBarButtonItem) {
         delegate?.editorNavigationItemController(self, didTapProgressButton: sender)
     }
-
-    @objc private func close(_ sender: UIBarButtonItem) {
-        delegate?.editorNavigationItemController(self, didTapCloseButton: sender)
+    
+    @objc private func temporaryAccount(_ sender: UIBarButtonItem) {
+        delegate?.editorNavigationItemController(self, didTapTemporaryAccountNoticesButton: activeTemporaryAccountNoticesButton)
+    }
+    
+    @objc private func ipAccount(_ sender: UIBarButtonItem) {
+        delegate?.editorNavigationItemController(self, didTapIPAccountNoticesButton: temporaryAccountNoticesButton)
     }
 
     @objc private func undo(_ sender: UIBarButtonItem) {
@@ -108,14 +127,24 @@ class EditorNavigationItemController: NSObject, Themeable {
             editNoticesButton
         ])
     }
+    
+    func addTempAccountsNoticesButtons(wikiHasTempAccounts: Bool?) {
+        guard let wikiHasTempAccounts, wikiHasTempAccounts, !authManager.authStateIsPermanent else { return }
+        if authManager.authStateIsTemporary {
+            navigationItem?.rightBarButtonItems?.append(activeTemporaryAccountNoticesButton)
+        } else {
+            navigationItem?.rightBarButtonItems?.append(temporaryAccountNoticesButton)
+        }
+    }
 
     private func configureNavigationButtonItems() {
-
-        navigationItem?.leftBarButtonItem = closeButton
-
+        
+        let fixedWidthSpacer = UIBarButtonItem(barButtonSystemItem: .fixedSpace, target: nil, action: nil)
+        fixedWidthSpacer.width = 16
+        
         navigationItem?.rightBarButtonItems = [
             progressButton,
-            UIBarButtonItem.wmf_barButtonItem(ofFixedWidth: 16),
+            fixedWidthSpacer,
             separatorButton,
             readingThemesControlsButton,
             redoButton,

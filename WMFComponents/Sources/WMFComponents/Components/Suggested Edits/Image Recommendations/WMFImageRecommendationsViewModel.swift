@@ -13,7 +13,7 @@ public final class WMFImageRecommendationsViewModel: ObservableObject {
     }
     
     public struct LocalizedStrings {
-		public typealias SurveyLocalizedStrings =  WMFImageRecommendationsSurveyViewModel.LocalizedStrings
+		public typealias SurveyLocalizedStrings =  WMFSurveyViewModel.LocalizedStrings
         public typealias EmptyLocalizedStrings = WMFEmptyViewModel.LocalizedStrings
         public typealias TooltipLocalizedStrings = WMFTooltipViewModel.LocalizedStrings
         public typealias ErrorLocalizedStrings = WMFErrorViewModel.LocalizedStrings
@@ -45,7 +45,7 @@ public final class WMFImageRecommendationsViewModel: ObservableObject {
         let title: String
         let viewArticle: String
 		let onboardingStrings: OnboardingStrings
-		let surveyLocalizedStrings: SurveyLocalizedStrings
+        let surveyLocalizedStrings: SurveyLocalizedStrings
         let emptyLocalizedStrings: EmptyLocalizedStrings
         let errorLocalizedStrings: ErrorLocalizedStrings
         let firstTooltipStrings: TooltipLocalizedStrings
@@ -59,12 +59,11 @@ public final class WMFImageRecommendationsViewModel: ObservableObject {
         let tutorialButtonTitle: String
         let problemWithFeatureButtonTitle: String
 
-
         public init(title: String, viewArticle: String, onboardingStrings: OnboardingStrings, surveyLocalizedStrings: SurveyLocalizedStrings, emptyLocalizedStrings: EmptyLocalizedStrings, errorLocalizedStrings: ErrorLocalizedStrings, firstTooltipStrings: TooltipLocalizedStrings, secondTooltipStrings: TooltipLocalizedStrings, thirdTooltipStrings: TooltipLocalizedStrings, bottomSheetTitle: String, yesButtonTitle: String, noButtonTitle: String, notSureButtonTitle: String, learnMoreButtonTitle: String, tutorialButtonTitle: String, problemWithFeatureButtonTitle: String) {
             self.title = title
             self.viewArticle = viewArticle
             self.onboardingStrings = onboardingStrings
-			self.surveyLocalizedStrings = surveyLocalizedStrings
+            self.surveyLocalizedStrings = surveyLocalizedStrings
             self.emptyLocalizedStrings = emptyLocalizedStrings
             self.errorLocalizedStrings = errorLocalizedStrings
             self.firstTooltipStrings = firstTooltipStrings
@@ -78,7 +77,6 @@ public final class WMFImageRecommendationsViewModel: ObservableObject {
             self.tutorialButtonTitle = tutorialButtonTitle
             self.problemWithFeatureButtonTitle = problemWithFeatureButtonTitle
         }
-
     }
 
     public class WMFImageRecommendationData {
@@ -123,7 +121,6 @@ public final class WMFImageRecommendationsViewModel: ObservableObject {
         public var imageWikitext: String?
         public var fullArticleWikitextWithImage: String?
         public var suggestionAcceptDate: Date?
-        public var altTextExperimentAcceptDate: Date?
         public var lastRevisionID: UInt64?
         public var localizedFileTitle: String?
 
@@ -139,8 +136,9 @@ public final class WMFImageRecommendationsViewModel: ObservableObject {
 
     public let project: WMFProject
     public let semanticContentAttribute: UISemanticContentAttribute
-    public let isLoggedIn: Bool
+    public let isPermanent: Bool
     let localizedStrings: LocalizedStrings
+    let surveyOptions: [WMFSurveyViewModel.OptionViewModel]
 
     private(set) var imageRecommendations: [ImageRecommendation] = []
     @Published public private(set) var currentRecommendation: ImageRecommendation?
@@ -161,11 +159,12 @@ public final class WMFImageRecommendationsViewModel: ObservableObject {
 
     // MARK: - Lifecycle
     
-    public init(project: WMFProject, semanticContentAttribute: UISemanticContentAttribute, isLoggedIn: Bool, localizedStrings: LocalizedStrings, needsSuppressPosting: Bool) {
-        self.isLoggedIn = isLoggedIn
+    public init(project: WMFProject, semanticContentAttribute: UISemanticContentAttribute, isPermanent: Bool, localizedStrings: LocalizedStrings, surveyOptions: [WMFSurveyViewModel.OptionViewModel], needsSuppressPosting: Bool) {
+        self.isPermanent = isPermanent
         self.project = project
         self.semanticContentAttribute = semanticContentAttribute
         self.localizedStrings = localizedStrings
+        self.surveyOptions = surveyOptions
         self.needsSuppressPosting = needsSuppressPosting
         self.growthTasksDataController = WMFGrowthTasksDataController(project: project)
         self.articleSummaryDataController = WMFArticleSummaryDataController()

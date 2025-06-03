@@ -12,7 +12,6 @@ public protocol WMFImageRecommendationsDelegate: AnyObject {
     func imageRecommendationsUserDidTapReportIssue()
     func imageRecommendationsDidTriggerError(_ error: Error)
     func imageRecommendationsDidTriggerTimeWarning()
-    func imageRecommendationDidTriggerAltTextExperimentPanel(isFlowB: Bool, imageRecommendationsViewController: WMFImageRecommendationsViewController)
 }
 
 public protocol WMFImageRecommendationsLoggingDelegate: AnyObject {
@@ -35,7 +34,6 @@ public protocol WMFImageRecommendationsLoggingDelegate: AnyObject {
     func logEmptyStateDidAppear()
     func logEmptyStateDidTapBack()
     func logDialogWarningMessageDidDisplay(fileName: String, recommendationSource: String)
-    func logAltTextExperimentDidAssignGroup()
 }
 
 fileprivate final class WMFImageRecommendationsHostingViewController: WMFComponentHostingController<WMFImageRecommendationsView> {
@@ -62,7 +60,7 @@ fileprivate final class WMFImageRecommendationsHostingViewController: WMFCompone
     }
 }
 
-public final class WMFImageRecommendationsViewController: WMFCanvasViewController {
+public final class WMFImageRecommendationsViewController: WMFCanvasViewController, WMFNavigationBarConfiguring {
 
     // MARK: - Properties
 
@@ -115,16 +113,9 @@ public final class WMFImageRecommendationsViewController: WMFCanvasViewControlle
 
     public override func viewDidLoad() {
         super.viewDidLoad()
-        title = viewModel.localizedStrings.title
-        navigationItem.backButtonDisplayMode = .generic
         setupOverflowMenu()
-        addComponent(hostingViewController, pinToEdges: true)
-
-        navigationController?.interactivePopGestureRecognizer?.isEnabled = false
-        let image = WMFSFSymbolIcon.for(symbol: .chevronBackward, font: .boldCallout)
-        navigationItem.leftBarButtonItem = UIBarButtonItem(image: image, style: .plain, target: self, action: #selector(tappedBack))
+        addComponent(hostingViewController, pinToEdges: true, respectSafeArea: true)
     }
-
 
     public override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         return .portrait
@@ -136,7 +127,7 @@ public final class WMFImageRecommendationsViewController: WMFCanvasViewControlle
 
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        navigationController?.setNavigationBarHidden(false, animated: false)
+        configureNavigationBar()
     }
 
     public override func viewDidAppear(_ animated: Bool) {
@@ -159,6 +150,21 @@ public final class WMFImageRecommendationsViewController: WMFCanvasViewControlle
             cancellable.cancel()
         }
         cancellables.removeAll()
+    }
+    
+    public override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        
+        if parent == nil {
+            tappedBack()
+        }
+    }
+    
+    private func configureNavigationBar() {
+
+        let titleConfig = WMFNavigationBarTitleConfig(title: viewModel.localizedStrings.title, customView: nil, alignment: .centerCompact)
+        
+        configureNavigationBar(titleConfig: titleConfig, closeButtonConfig: nil, profileButtonConfig: nil, tabsButtonConfig: nil, searchBarConfig: nil, hideNavigationBarOnScroll: false)
     }
     
     public func presentImageRecommendationBottomSheet() {
@@ -185,49 +191,16 @@ public final class WMFImageRecommendationsViewController: WMFCanvasViewControlle
     }
 
     // MARK: Private methods
-    
-    private func shouldShowAltTextExperimentModal() -> Bool {
-        guard let lastRecommendation = viewModel.lastRecommendation,
-            lastRecommendation.altText == nil,
-            lastRecommendation.lastRevisionID != nil else {
-           return false
-        }
-
-        let dataController = WMFAltTextDataController.shared
-
-        guard let dataController else {
-            return false
-        }
-
-        let isLoggedIn = viewModel.isLoggedIn
-
-        do {
-            try dataController.assignImageRecsExperiment(isLoggedIn: isLoggedIn, project: viewModel.project)
-            loggingDelegate?.logAltTextExperimentDidAssignGroup()
-        } catch let error {
-            debugPrint(error)
-            return false
-        }
-
-        if dataController.shouldEnterAltTextImageRecommendationsFlow(isLoggedIn: isLoggedIn, project: viewModel.project) {
-            return true
-        }
-
-        return false
-    }
 
     @objc private func tappedBack() {
 
         if viewModel.imageRecommendations.isEmpty && viewModel.loadingError == nil {
             loggingDelegate?.logEmptyStateDidTapBack()
         }
-
-        navigationController?.interactivePopGestureRecognizer?.isEnabled = true
-        navigationController?.popViewController(animated: true)
     }
 
     private func setupOverflowMenu() {
-        let rightBarButtonItem = UIBarButtonItem(image: UIImage(systemName: "ellipsis.circle"), primaryAction: nil, menu: overflowMenu)
+        let rightBarButtonItem = UIBarButtonItem(image: WMFSFSymbolIcon.for(symbol: .ellipsisCircle), primaryAction: nil, menu: overflowMenu)
         navigationItem.rightBarButtonItem = rightBarButtonItem
         rightBarButtonItem.tintColor = theme.link
     }
@@ -313,11 +286,7 @@ public final class WMFImageRecommendationsViewController: WMFCanvasViewControlle
                 
                 if !isLoading {
                     if self.viewModel.currentRecommendation?.articleSummary != nil {
-                        if self.shouldShowAltTextExperimentModal() {
-                            self.delegate?.imageRecommendationDidTriggerAltTextExperimentPanel(isFlowB: true, imageRecommendationsViewController: self)
-                        } else {
-                            self.presentImageRecommendationBottomSheet()
-                        }
+                        self.presentImageRecommendationBottomSheet()
                     }
                 }
             }
@@ -336,6 +305,7 @@ public final class WMFImageRecommendationsViewController: WMFCanvasViewControlle
     private func showTutorial() {
         presentTooltipsIfNecessary(onBottomSheetViewController: imageRecommendationBottomSheetController, force: true)
     }
+
 
     private func goToFAQ() {
         delegate?.imageRecommendationsUserDidTapLearnMore(url: viewModel.learnMoreURL)

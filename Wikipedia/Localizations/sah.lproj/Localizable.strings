@@ -85,7 +85,6 @@
 "button-next" = "Аныгыскы";
 "button-ok" = "Сөп";
 "button-publish" = "Бэчээттииргэ";
-"button-read-now" = "Билигин ааҕабын";
 "button-report-a-bug" = "Алҕас туһунан этии";
 "button-save-for-later" = "Хойутуу";
 "button-saved-for-later" = "Кэлин бигэргэтиэм";
@@ -232,7 +231,6 @@
 "main-menu-account-login" = "Киирии";
 "main-menu-account-logout" = "Тахсыы";
 "main-menu-account-logout-are-you-sure" = "Кырдьык тахсаары гынаҕын дуо?";
-"main-menu-account-logout-cancel" = "Салҕаама";
 "main-menu-account-title-logged-in" = "Киирбит аатыҥ $1";
 "main-menu-heading-legal" = "Бүк охсунуу";
 "main-menu-nearby" = "Чугастааҕы";
@@ -241,7 +239,6 @@
 "main-menu-terms-of-use" = "Туһаныы сиэрэ";
 "main-menu-title" = "Эбии";
 "main-menu-zero-faq" = "Wikipedia Zero туһунан ыйытыылар";
-"menu-cancel-accessibility-label" = "Бигэргэтимэ";
 "navbar-title-mode-edit-wikitext-preview" = "Эрдэ көрүү";
 "nearby-distance-label-feet" = "$1 фуут";
 "nearby-distance-label-km" = "$1 км";

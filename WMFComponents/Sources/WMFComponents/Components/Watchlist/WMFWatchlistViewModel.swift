@@ -54,6 +54,7 @@ public final class WMFWatchlistViewModel: ObservableObject {
 		let timestamp: Date
 		let username: String
 		let isAnonymous: Bool
+        let isTemp: Bool
 		let isBot: Bool
 		let revisionID: UInt
 		let oldRevisionID: UInt
@@ -61,13 +62,14 @@ public final class WMFWatchlistViewModel: ObservableObject {
 		let project: WMFProject
 		private let htmlStripped: ((String) -> String)
 
-		public init(title: String, commentHTML: String, commentWikitext: String, timestamp: Date, username: String, isAnonymous: Bool, isBot: Bool, revisionID: UInt, oldRevisionID: UInt, byteChange: Int, project: WMFProject, htmlStripped: @escaping ((String) -> String)) {
+        public init(title: String, commentHTML: String, commentWikitext: String, timestamp: Date, username: String, isAnonymous: Bool, isTemp: Bool, isBot: Bool, revisionID: UInt, oldRevisionID: UInt, byteChange: Int, project: WMFProject, htmlStripped: @escaping ((String) -> String)) {
 			self.title = title
 			self.commentHTML = commentHTML
 			self.commentWikitext = commentWikitext
 			self.timestamp = timestamp
 			self.username = username
 			self.isAnonymous = isAnonymous
+            self.isTemp = isTemp
 			self.isBot = isBot
 			self.revisionID = revisionID
 			self.oldRevisionID = oldRevisionID
@@ -114,21 +116,10 @@ public final class WMFWatchlistViewModel: ObservableObject {
 			return DateFormatter.wmfFullDateFormatter.string(from: date)
 		}
 	}
-    
-    public struct PresentationConfiguration {
-        let showNavBarUponAppearance: Bool
-        let hideNavBarUponDisappearance: Bool
-        
-        public init(showNavBarUponAppearance: Bool = false, hideNavBarUponDisappearance: Bool = false) {
-            self.showNavBarUponAppearance = showNavBarUponAppearance
-            self.hideNavBarUponDisappearance = hideNavBarUponDisappearance
-        }
-    }
 
 	// MARK: - Properties
 
 	var localizedStrings: LocalizedStrings
-    let presentationConfiguration: PresentationConfiguration
 
 	private let dataController = WMFWatchlistDataController()
 	private var items: [ItemViewModel] = []
@@ -142,13 +133,12 @@ public final class WMFWatchlistViewModel: ObservableObject {
 
 	// MARK: - Lifecycle
 
-    public init(localizedStrings: LocalizedStrings, presentationConfiguration: PresentationConfiguration) {
-		self.localizedStrings = localizedStrings
-        self.presentationConfiguration = presentationConfiguration
-		self.menuButtonItems = []
+    public init(localizedStrings: LocalizedStrings) {
+        self.localizedStrings = localizedStrings
+        self.menuButtonItems = []
         self.menuButtonItemsWithoutThank = []
         setupMenuItems()
-	}
+    }
 
     private func setupMenuItems() {
         var menuItems: [WMFSmallMenuButton.MenuItem] = [
@@ -171,7 +161,7 @@ public final class WMFWatchlistViewModel: ObservableObject {
 			switch result {
 			case .success(let watchlist):
 				self.items = watchlist.items.map { item in
-					let viewModel = ItemViewModel(title: item.title, commentHTML: item.commentHtml, commentWikitext: item.commentWikitext, timestamp: item.timestamp, username: item.username, isAnonymous: item.isAnon, isBot: item.isBot, revisionID: item.revisionID, oldRevisionID: item.oldRevisionID, byteChange: Int(item.byteLength) - Int(item.oldByteLength), project: item.project, htmlStripped: self.localizedStrings.htmlStripped)
+                    let viewModel = ItemViewModel(title: item.title, commentHTML: item.commentHtml, commentWikitext: item.commentWikitext, timestamp: item.timestamp, username: item.username, isAnonymous: item.isAnon, isTemp: item.isTemp, isBot: item.isBot, revisionID: item.revisionID, oldRevisionID: item.oldRevisionID, byteChange: Int(item.byteLength) - Int(item.oldByteLength), project: item.project, htmlStripped: self.localizedStrings.htmlStripped)
 					return viewModel
 				}
 				self.sections = self.sortWatchlistItems()

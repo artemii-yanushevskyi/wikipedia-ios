@@ -1,11 +1,12 @@
 import WMFComponents
 import WMF
+import WMFData
 
 protocol DescriptionEditViewControllerDelegate: AnyObject {
     func descriptionEditViewControllerEditSucceeded(_ descriptionEditViewController: DescriptionEditViewController, result: ArticleDescriptionPublishResult)
 }
 
-@objc class DescriptionEditViewController: WMFScrollViewController, Themeable, UITextViewDelegate {
+@objc class DescriptionEditViewController: WMFScrollViewController, Themeable, UITextViewDelegate, WMFNavigationBarConfiguring {
     @objc public static let didPublishNotification = NSNotification.Name("DescriptionEditViewControllerDidPublishNotification")
 
     @IBOutlet private var learnMoreButton: UIButton!
@@ -24,8 +25,19 @@ protocol DescriptionEditViewControllerDelegate: AnyObject {
     private var editType: ArticleDescriptionEditType = .add
 
     var delegate: DescriptionEditViewControllerDelegate? = nil
-    
+    var authState: AuthState? = nil
+    var wikiHasTempAccounts: Bool?
+
     private var articleDescriptionController: ArticleDescriptionControlling!
+    private var toastView: UIView?
+    
+    var tempAccountsMediaWikiURL: String {
+        var languageCodeSuffix = ""
+        if let primaryAppLanguageCode = dataStore.languageLinkController.appLanguage?.languageCode {
+            languageCodeSuffix = "\(primaryAppLanguageCode)"
+        }
+        return "https://www.mediawiki.org/wiki/Special:MyLanguage/Help:Temporary_accounts?uselang=\(languageCodeSuffix)"
+    }
     
     // These would be better as let's and a required initializer but it's not an opportune time to ditch the storyboard
     // Convert these to non-force unwrapped if there's some way to ditch the storyboard or provide an initializer with the storyboard
@@ -35,15 +47,13 @@ protocol DescriptionEditViewControllerDelegate: AnyObject {
         let vc = wmf_initialViewControllerFromClassStoryboard()!
         vc.isAddingNewTitleDescription = articleDescriptionController.descriptionSource == .none
         vc.dataStore = dataStore
+        vc.theme = theme
         vc.articleDescriptionController = articleDescriptionController
         return vc
     }
     
     override func viewDidLoad() {
         super.viewDidLoad()
-
-        navigationItem.leftBarButtonItem = UIBarButtonItem(image: UIImage(named:"close"), style: .plain, target:self, action:#selector(closeButtonPushed(_:)))
-        navigationItem.leftBarButtonItem?.accessibilityLabel = CommonStrings.closeButtonAccessibilityLabel
 
         lengthWarningLabel.text = WMFLocalizedString("description-edit-warning", value:"Try to keep descriptions short so users can understand the article's subject at a glance", comment:"Title text for label reminding users to keep descriptions concise")
         casingWarningLabel.text = WMFLocalizedString("description-edit-warning-casing", value:"Only proper nouns should be capitalized, even at the start of the sentence.", comment:"Title text for label reminding users to begin article descriptions with a lowercase letter for non-EN wikis.")
@@ -67,12 +77,12 @@ protocol DescriptionEditViewControllerDelegate: AnyObject {
 
             if let currentDescription = description {
                 self.descriptionTextView.text = currentDescription
-                self.title = WMFLocalizedString("description-edit-title", value:"Edit description", comment:"Title text for description editing screen")
                 self.editType = .change
             } else {
-                self.title = WMFLocalizedString("description-add-title", value:"Add description", comment:"Title text for description addition screen")
                 self.editType = .add
             }
+            
+            configureNavigationBar()
 
             self.isPlaceholderLabelHidden = self.shouldHidePlaceholder()
             self.updateWarningLabels()
@@ -82,27 +92,117 @@ protocol DescriptionEditViewControllerDelegate: AnyObject {
                 self.presentBlockedPanel(error: blockedError)
             }
         }
-        
+
         descriptionTextView.textContainer.lineFragmentPadding = 0
         descriptionTextView.textContainerInset = .zero
         
         updateFonts()
+
+        Task {
+            wikiHasTempAccounts = await checkWikiStatus()
+            if let wikiHasTempAccounts, !dataStore.authenticationManager.authStateIsPermanent && wikiHasTempAccounts {
+                if !dataStore.authenticationManager.authStateIsTemporary {
+                    authState = .ipAccount
+                } else {
+                    authState = .tempAccount
+                }
+            } else {
+                authState = .loggedIn
+            }
+        }
+    }
+
+    private func checkWikiStatus() async -> Bool {
+        let dataController = WMFTempAccountDataController.shared
+        return await dataController.asyncCheckWikiTempAccountAvailability(language: articleDescriptionController.articleLanguageCode, isCheckingPrimaryWiki: false)
+    }
+
+    private func showTempAccountToast() {
+        let authManager = dataStore.authenticationManager
+        
+        if let wikiHasTempAccounts, !authManager.authStateIsPermanent && wikiHasTempAccounts {
+            if authManager.authStateIsTemporary {
+                // Notice
+                let format = CommonStrings.saveViewTempAccountNotice
+                let username = dataStore.authenticationManager.authStateTemporaryUsername ?? "*****"
+                let title = String.localizedStringWithFormat(format, username)
+                let image = UIImage(systemName: "exclamationmark.circle.fill")
+                WMFAlertManager.sharedInstance.showBottomAlertWithMessage(
+                    title,
+                    subtitle: nil,
+                    image: image,
+                    type: .custom,
+                    customTypeName: "edit-published",
+                    dismissPreviousAlerts: true,
+                    buttonTitle: CommonStrings.tempAccountsReadMoreTitle,
+                    buttonCallBack: {
+                        guard let navigationController = self.navigationController else { return }
+                        let tempAccountSheetCoordinator = TempAccountSheetCoordinator(navigationController: navigationController, theme: self.theme, dataStore: self.dataStore, didTapDone: { [weak self] in
+                            self?.dismiss(animated: true)
+                        }, didTapContinue: { [weak self] in
+                            self?.dismiss(animated: true)
+                        }, isTempAccount: true)
+                        
+                        _ = tempAccountSheetCoordinator.start()
+                    }
+                )
+            } else {
+                // Warning
+                let title = CommonStrings.saveViewTempAccountWarning
+                let image = UIImage(systemName: "exclamationmark.triangle.fill")
+                WMFAlertManager.sharedInstance.showBottomAlertWithMessage(
+                    title,
+                    subtitle: nil,
+                    image: image,
+                    type: .custom,
+                    customTypeName: "edit-published",
+                    dismissPreviousAlerts: true,
+                    buttonTitle: CommonStrings.tempAccountsReadMoreTitle,
+                    buttonCallBack: {
+                        guard let navigationController = self.navigationController else { return }
+                        let tempAccountSheetCoordinator = TempAccountSheetCoordinator(navigationController: navigationController, theme: self.theme, dataStore: self.dataStore, didTapDone: { [weak self] in
+                            self?.dismiss(animated: true)
+                        }, didTapContinue: { [weak self] in
+                            self?.dismiss(animated: true)
+                        }, isTempAccount: false)
+                        
+                        _ = tempAccountSheetCoordinator.start()
+                    }
+                )
+            }
+        }
     }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         enableProgressiveButton(false)
-        loginLabel.isHidden = dataStore.authenticationManager.isLoggedIn
+        loginLabel.isHidden = dataStore.authenticationManager.authStateIsPermanent
     }
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        descriptionTextView.becomeFirstResponder()
+        showTempAccountToast()
     }
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         enableProgressiveButton(false)
+    }
+    
+    private func configureNavigationBar() {
+        let title: String
+        switch editType {
+        case .add:
+            title = WMFLocalizedString("description-add-title", value:"Add description", comment:"Title text for description addition screen")
+        case .change:
+            title = WMFLocalizedString("description-edit-title", value:"Edit description", comment:"Title text for description editing screen")
+        }
+        
+        let titleConfig = WMFNavigationBarTitleConfig(title: title, customView: nil, alignment: .centerCompact)
+        
+        let closeConfig = WMFNavigationBarCloseButtonConfig(text: CommonStrings.cancelActionTitle, target: self, action: #selector(closeButtonPushed(_:)), alignment: .leading)
+
+        configureNavigationBar(titleConfig: titleConfig, closeButtonConfig: closeConfig, profileButtonConfig: nil, tabsButtonConfig: nil, searchBarConfig: nil, hideNavigationBarOnScroll: false)
     }
 
     private var isPlaceholderLabelHidden = true {
@@ -194,7 +294,7 @@ protocol DescriptionEditViewControllerDelegate: AnyObject {
             return
         }
         
-        let navVC = WMFThemeableNavigationController.init(rootViewController: vc, theme: theme)
+        let navVC = WMFComponentNavigationController(rootViewController: vc, modalPresentationStyle: .overFullScreen)
         present(navVC, animated: true, completion: nil)
     }
     
@@ -273,10 +373,47 @@ protocol DescriptionEditViewControllerDelegate: AnyObject {
                         
                         EditAttemptFunnel.shared.logSaveSuccess(pageURL: articleURL, revisionId: revisionID)
                     }
+                    var needsNewTempAccountToast = false
+                    guard let dataStore = self.dataStore else { return }
+                    if let wikiHasTempAccounts = self.wikiHasTempAccounts, !dataStore.authenticationManager.authStateIsPermanent && wikiHasTempAccounts {
+                        if dataStore.authenticationManager.authStateIsTemporary {
+                            if self.authState == .ipAccount {
+                                needsNewTempAccountToast = true
+                            }
+                        }
+                    }
                     self.dismiss(animated: true) {
-                        presentingVC?.wmf_showDescriptionPublishedPanelViewController(theme: self.theme)
+                        presentingVC?.wmf_showDescriptionPublishedPanelViewController(theme: self.theme, completion: {
+                            let tempAccountUsername = self.dataStore.authenticationManager.authStateTemporaryUsername ?? "*****"
+                            let title = CommonStrings.tempAccountPublishTitle
+                            let format = WMFLocalizedString("description-editing-temp-account-created-subtitle", value: "Temporary account %1$@ was created after your edit was published. It will expire in 90 days.", comment: "More information on the creation of temporary accounts, $1 replaces their username.")
+                            let subtitle = String.localizedStringWithFormat(format, tempAccountUsername)
+                            let image = WMFIcon.temp
+
+                            if needsNewTempAccountToast {
+                                WMFAlertManager.sharedInstance.showBottomAlertWithMessage(
+                                    title,
+                                    subtitle: subtitle,
+                                    image: image,
+                                    type: .custom,
+                                    customTypeName: "edit-published",
+                                    dismissPreviousAlerts: true,
+                                    buttonTitle: CommonStrings.learnMoreTitle(),
+                                    buttonCallBack: {
+                                        if let url = URL(string: self.tempAccountsMediaWikiURL) {
+                                            let config = SinglePageWebViewController.StandardConfig(url: url, useSimpleNavigationBar: true)
+                                            let webVC = SinglePageWebViewController(configType: .standard(config), theme: self.theme)
+                                            let newNavigationVC =
+                                            WMFComponentNavigationController(rootViewController: webVC, modalPresentationStyle: .formSheet)
+                                            presentingVC?.present(newNavigationVC, animated: true)
+                                        }
+                                    }
+                                )
+                            }
+                        })
                         NotificationCenter.default.post(name: DescriptionEditViewController.didPublishNotification, object: nil)
                     }
+
                 case .failure(let error):
                     let nsError = error as NSError
                     if let articleURL = self.articleDescriptionController.article.url {

@@ -1,4 +1,5 @@
 import UIKit
+import WMFComponents
 
 private struct Section {
     let items: [Item]
@@ -12,7 +13,8 @@ private struct Item {
 }
 
 @objc(WMFSearchSettingsViewController)
-final class SearchSettingsViewController: SubSettingsViewController {
+final class SearchSettingsViewController: SubSettingsViewController, WMFNavigationBarConfiguring {
+    private lazy var sections: [Section] = []
 
     public override func viewDidLoad() {
         super.viewDidLoad()
@@ -20,11 +22,20 @@ final class SearchSettingsViewController: SubSettingsViewController {
         tableView.register(WMFTableHeaderFooterLabelView.wmf_classNib(), forHeaderFooterViewReuseIdentifier: WMFTableHeaderFooterLabelView.identifier)
         tableView.sectionFooterHeight = UITableView.automaticDimension
         tableView.estimatedSectionFooterHeight = 44
-        title = CommonStrings.searchTitle
         reloadSectionData()
     }
-
-    private lazy var sections: [Section] = []
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        configureNavigationBar()
+    }
+    
+    private func configureNavigationBar() {
+        let titleConfig = WMFNavigationBarTitleConfig(title: CommonStrings.searchTitle, customView: nil, alignment: .centerCompact)
+        
+        configureNavigationBar(titleConfig: titleConfig, closeButtonConfig: nil, profileButtonConfig: nil, tabsButtonConfig: nil, searchBarConfig: nil, hideNavigationBarOnScroll: false)
+    }
 
     private func reloadSectionData() {
         let showLanguagesOnSearch = Item(title: WMFLocalizedString("settings-language-bar", value: "Show languages on search", comment: "Title in Settings for toggling the display the language bar in the search view"), isOn: UserDefaults.standard.wmf_showSearchLanguageBar(), controlTag: 1)

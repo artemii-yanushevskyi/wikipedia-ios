@@ -11,6 +11,7 @@ The official Wikipedia iOS app.
 
 ## Building and Running
 
+Note: Your Xcode version must be at least 16.0.
 In the directory, run `./scripts/setup`.  Note: going to `scripts` directory and running `setup` will not work due to relative paths.
 
 Running `scripts/setup` will setup your computer to build and run the app. The script assumes you have Xcode installed already. It will install [homebrew](https://brew.sh), [SwiftLint](https://github.com/realm/SwiftLint), and [ClangFormat](https://clang.llvm.org/docs/ClangFormat.html). It will also create a pre-commit hook that uses ClangFormat for linting Objective-C code.
@@ -25,7 +26,7 @@ If you'd rather install the development prerequisites yourself without our scrip
 * [**ClangFormat**](https://clang.llvm.org/docs/ClangFormat.html) - We use this for linting Objective-C code.
 
 ## Contributing
-Covered in the [contributing document](CONTRIBUTING.md).
+Covered in our [contributing documention](https://www.mediawiki.org/wiki/Wikimedia_Apps/Team/iOS#Contribute_to_development) on MediaWiki.
 
 ## Development Guidelines
 These are general guidelines rather than hard rules.

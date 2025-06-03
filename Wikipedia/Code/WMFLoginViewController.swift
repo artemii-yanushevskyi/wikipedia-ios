@@ -1,6 +1,10 @@
 import UIKit
+import WMFComponents
+import SwiftUI
+import WMFData
+import CocoaLumberjackSwift
 
-class WMFLoginViewController: WMFScrollViewController, UITextFieldDelegate, WMFCaptchaViewControllerDelegate, Themeable {
+class WMFLoginViewController: WMFScrollViewController, UITextFieldDelegate, WMFCaptchaViewControllerDelegate, Themeable, WMFNavigationBarConfiguring {
     // SINGLETONTODO
     let dataStore = MWKDataStore.shared()
     
@@ -12,14 +16,17 @@ class WMFLoginViewController: WMFScrollViewController, UITextFieldDelegate, WMFC
     @IBOutlet fileprivate var createAccountButton: WMFAuthLinkLabel!
     @IBOutlet fileprivate var forgotPasswordButton: UILabel!
     @IBOutlet fileprivate var titleLabel: UILabel!
+    @IBOutlet weak var scrollContainerTopConstraint: NSLayoutConstraint!
     @IBOutlet fileprivate var captchaContainer: UIView!
     @IBOutlet fileprivate var loginButton: WMFAuthButton!
     @IBOutlet weak var scrollContainer: UIView!
     
     public var loginSuccessCompletion: (() -> Void)?
+    public var createAccountSuccessCustomDismissBlock: (() -> Void)?
     public var loginDismissedCompletion: (() -> Void)?
 
     private var startDate: Date? // to calculate time elapsed between login start and login success
+    private var toastView: UIView?
     
     var category: EventCategoryMEP?
     fileprivate var theme: Theme = Theme.standard
@@ -50,9 +57,6 @@ class WMFLoginViewController: WMFScrollViewController, UITextFieldDelegate, WMFC
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        navigationItem.leftBarButtonItem = UIBarButtonItem(image: UIImage(named:"close"), style: .plain, target:self, action:#selector(closeButtonPushed(_:)))
-        navigationItem.leftBarButtonItem?.accessibilityLabel = CommonStrings.closeButtonAccessibilityLabel
-
         loginButton.setTitle(WMFLocalizedString("main-menu-account-login", value:"Log in", comment:"Button text for logging in. {{Identical|Log in}}"), for: .normal)
         
         createAccountButton.strings = WMFAuthLinkLabelStrings(dollarSignString: WMFLocalizedString("login-no-account", value:"Don't have an account? %1$@", comment:"Text for create account button. %1$@ is the message {{msg-wikimedia|login-account-join-wikipedia}}"), substitutionString: WMFLocalizedString("login-join-wikipedia", value:"Join Wikipedia.", comment:"Join Wikipedia text to be used as part of a create account button"))
@@ -76,6 +80,50 @@ class WMFLoginViewController: WMFScrollViewController, UITextFieldDelegate, WMFC
         wmf_add(childController:captchaViewController, andConstrainToEdgesOfContainerView: captchaContainer)
         
         apply(theme: theme)
+
+        if WMFTempAccountDataController.shared.primaryWikiHasTempAccountsEnabled {
+            let authManager = dataStore.authenticationManager
+            if authManager.authStateIsTemporary {
+                let viewModel = WMFTempAccountsToastViewModel(
+                    didTapReadMore: {
+                        guard let navigationController = self.navigationController else { return }
+                        let tempAccountSheetCoordinator = TempAccountSheetCoordinator(navigationController: navigationController, theme: self.theme, dataStore: self.dataStore, didTapDone: { [weak self] in
+                            self?.dismiss(animated: true)
+                        }, didTapContinue: {[weak self] in
+                            self?.dismiss(animated: true)
+                        }, isTempAccount: true)
+                        _ = tempAccountSheetCoordinator.start()
+                    },
+                    title: CommonStrings.tempAccountsToastTitle(),
+                    readMoreButtonTitle: CommonStrings.tempAccountsReadMoreTitle
+                )
+
+                let toastController = WMFTempAccountsToastHostingController(viewModel: viewModel)
+                self.toastView = toastController.view
+
+                addChild(toastController)
+                view.addSubview(toastController.view)
+                toastController.didMove(toParent: self)
+                toastController.view.translatesAutoresizingMaskIntoConstraints = false
+
+                NSLayoutConstraint.activate([
+                    toastController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 0),
+                    toastController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: 0),
+                    toastController.view.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor)
+                ])
+            }
+        }
+    }
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        scrollContainerTopConstraint.constant = toastView?.frame.height ?? 0
+    }
+    
+    private func configureNavigationBar() {
+        let titleConfig = WMFNavigationBarTitleConfig(title: "", customView: nil, alignment: .hidden)
+        let closeConfig = WMFNavigationBarCloseButtonConfig(text: CommonStrings.cancelActionTitle, target: self, action: #selector(closeButtonPushed(_:)), alignment: .leading)
+        configureNavigationBar(titleConfig: titleConfig, closeButtonConfig: closeConfig, profileButtonConfig: nil, tabsButtonConfig: nil, searchBarConfig: nil, hideNavigationBarOnScroll: false)
     }
     
     @IBAction func textFieldDidChange(_ sender: UITextField) {
@@ -122,6 +170,8 @@ class WMFLoginViewController: WMFScrollViewController, UITextFieldDelegate, WMFC
         
         updatePasswordFieldReturnKeyType()
         enableProgressiveButtonIfNecessary()
+        
+        configureNavigationBar()
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -163,7 +213,8 @@ class WMFLoginViewController: WMFScrollViewController, UITextFieldDelegate, WMFC
             assertionFailure("One or more of the required parameters are nil")
             return
         }
-        dataStore.authenticationManager.login(username: username, password: password, retypePassword: nil, oathToken: nil, captchaID: captchaViewController?.captcha?.captchaID, captchaWord: captchaViewController?.solution) { (loginResult) in
+        
+        dataStore.authenticationManager.login(username: username, password: password, retypePassword: nil, oathToken: nil, emailAuthCode: nil, captchaID: captchaViewController?.captcha?.captchaID, captchaWord: captchaViewController?.solution) { (loginResult) in
             switch loginResult {
             case .success:
                 let loggedInMessage = String.localizedStringWithFormat(WMFLocalizedString("main-menu-account-title-logged-in", value:"Logged in as %1$@", comment:"Header text used when account is logged in. %1$@ will be replaced with current username."), self.usernameField.text ?? "")
@@ -189,7 +240,10 @@ class WMFLoginViewController: WMFScrollViewController, UITextFieldDelegate, WMFC
                         self.showChangeTempPasswordViewController()
                         return
                     case .needsOathTokenFor2FA:
-                        self.showTwoFactorViewController()
+                        self.showTwoFactorViewController(isEmailAuth: false)
+                        return
+                    case .needsEmailAuthToken:
+                        self.showTwoFactorViewController(isEmailAuth: true)
                         return
                     case .statusNotPass:
                         self.passwordField.text = nil
@@ -207,8 +261,6 @@ class WMFLoginViewController: WMFScrollViewController, UITextFieldDelegate, WMFC
 
                 self.enableProgressiveButtonIfNecessary()
                 WMFAlertManager.sharedInstance.showErrorAlert(error as NSError, sticky: true, dismissPreviousAlerts: true, tapCallBack: nil)
-            default:
-                break
             }
         }
     }
@@ -218,15 +270,18 @@ class WMFLoginViewController: WMFScrollViewController, UITextFieldDelegate, WMFC
             return
         }
         dismiss(animated: true, completion: {
-            let changePasswordVC = WMFChangePasswordViewController.wmf_initialViewControllerFromClassStoryboard()
-            changePasswordVC?.userName = self.usernameField!.text
-            changePasswordVC?.apply(theme: self.theme)
-            let navigationController = WMFThemeableNavigationController(rootViewController: changePasswordVC!, theme: self.theme, style: .sheet)
+            guard let changePasswordVC = WMFChangePasswordViewController.wmf_initialViewControllerFromClassStoryboard() else {
+                return
+            }
+            
+            changePasswordVC.userName = self.usernameField!.text
+            changePasswordVC.apply(theme: self.theme)
+            let navigationController = WMFComponentNavigationController(rootViewController: changePasswordVC, modalPresentationStyle: .overFullScreen)
             presenter.present(navigationController, animated: true, completion: nil)
         })
     }
 
-    func showTwoFactorViewController() {
+    func showTwoFactorViewController(isEmailAuth: Bool) {
         guard
             let presenter = presentingViewController,
             let twoFactorViewController = WMFTwoFactorPasswordViewController.wmf_initialViewControllerFromClassStoryboard()
@@ -234,13 +289,17 @@ class WMFLoginViewController: WMFScrollViewController, UITextFieldDelegate, WMFC
             assertionFailure("Expected view controller(s) not found")
             return
         }
+        if isEmailAuth {
+            twoFactorViewController.setDisplayModeToShortAlphanumeric()
+        }
+
         dismiss(animated: true, completion: {
             twoFactorViewController.userName = self.usernameField!.text
             twoFactorViewController.password = self.passwordField!.text
             twoFactorViewController.captchaID = self.captchaViewController?.captcha?.captchaID
             twoFactorViewController.captchaWord = self.captchaViewController?.solution
             twoFactorViewController.apply(theme: self.theme)
-            let navigationController = WMFThemeableNavigationController(rootViewController: twoFactorViewController, theme: self.theme, style: .sheet)
+            let navigationController = WMFComponentNavigationController(rootViewController: twoFactorViewController, modalPresentationStyle: .overFullScreen)
             presenter.present(navigationController, animated: true, completion: nil)
         })
     }
@@ -255,7 +314,7 @@ class WMFLoginViewController: WMFScrollViewController, UITextFieldDelegate, WMFC
             return
         }
         dismiss(animated: true, completion: {
-            let navigationController = WMFThemeableNavigationController(rootViewController: forgotPasswordVC, theme: self.theme, style: .sheet)
+            let navigationController = WMFComponentNavigationController(rootViewController: forgotPasswordVC, modalPresentationStyle: .overFullScreen)
             forgotPasswordVC.apply(theme: self.theme)
             presenter.present(navigationController, animated: true, completion: nil)
         })
@@ -271,10 +330,11 @@ class WMFLoginViewController: WMFScrollViewController, UITextFieldDelegate, WMFC
             return
         }
         createAcctVC.category = category
+        createAcctVC.createAccountSuccessCustomDismissBlock = createAccountSuccessCustomDismissBlock
         createAcctVC.apply(theme: theme)
         LoginFunnel.shared.logCreateAccountAttempt(category: category)
         dismiss(animated: true, completion: {
-            let navigationController = WMFThemeableNavigationController(rootViewController: createAcctVC, theme: self.theme, style: .sheet)
+            let navigationController = WMFComponentNavigationController(rootViewController: createAcctVC, modalPresentationStyle: .overFullScreen)
             createAcctVC.category = self.category
             presenter.present(navigationController, animated: true, completion: nil)
         })

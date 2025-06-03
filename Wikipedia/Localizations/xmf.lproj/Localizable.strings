@@ -3,6 +3,7 @@
 // Author: Narazeni
 // Author: Silovan
 
+"about-content-license" = "დინორეშ ლიცენზია";
 // Fuzzy
 "account-creation-captcha-obtaining" = "ახალ CAPTCHA-შ მეღება.";
 "account-creation-logging-in" = "სისტემაშა მიშულა…";
@@ -20,6 +21,10 @@
 "empty-no-other-article-languages-message" = "თე სტატია დიო ვა რე ჭარილი შხვა ნინაშა";
 "empty-no-other-article-languages-title" = "შხვა ნინეფი ვა რე ხემიოჭირინაფუს";
 "error-unknown" = "მეგორაფილი რე უჩინებუ ჩილათაშა.";
+"explore-featured-article-heading" = "გიშნაგორა სტატია";
+"explore-feed-preferences-featured-article-description" = "დღაშ გიშნაგორა სტატია ვიკიპედიას";
+"explore-feed-preferences-show-featured-article-title" = "ქაძირე ბართი „გიშნაგორა სტატია“";
+"featured-widget-content-failure-for-date" = "გიშნაგორა სტატია ვა რე ხემიოლუ თე თარიღიშო.";
 "history-clear-cancel" = "გოუქვაფა";
 // Fuzzy
 "history-clear-confirmation-heading" = "დობლასათო არძა ასერდეიანი ელემენტი?";

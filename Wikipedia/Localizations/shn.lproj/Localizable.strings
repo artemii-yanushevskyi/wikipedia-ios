@@ -1,9 +1,8 @@
-// Messages for Shan (ၽႃႇသႃႇတႆး )
+// Messages for Shan (တႆး)
 // Exported from translatewiki.net
 // Author: Nemo bis
 // Author: Saimawnkham
 
-"aaald-added-text-description-2" = "ထႅမ်သႂ်ႇ $1 ဝႆႉယဝ်ႉ";
 "about-content-license" = "ဝႂ်ၶႂၢင်း ၶေႃႈၼႂ်း";
 "about-content-license-details" = "သင်ၸိူဝ်ႉဝႃႈ ဢမ်ႇပႆႇလႆႈမၵ်းမၼ်ႈဝႆႉၼႆ တူဝ်ၼႂ်းမၼ်း ၸၢင်ႈၵႂႃႇဢဝ်လႆႈ ၽၢႆႇတႂ်ႈ  $1 လႆႈယူႇ။";
 "about-content-license-details-share-alike-license" = "Creative Commons Attribution-ShareAlike License";
@@ -99,7 +98,6 @@
 "button-next" = "ၵႂႃႇၼႃႈ";
 "button-ok" = "ဢူဝ်ႇၶေႇ";
 "button-publish" = "ပိုၼ်ဢွၵ်ႇ";
-"button-read-now" = "လူယၢမ်းလဵဝ်";
 "button-report-a-bug" = "တၢင်ႇလၢတ်ႈလွင်ႈယူပ်ႈယွမ်း";
 "button-save-for-later" = "သိမ်းဝႆႉတႃႇဝၢႆးလင်";
 "button-saved-for-later" = "တွၼ်ႈတႃႇဝၢႆးလင် သိမ်းဝႆႉယဝ်ႉ";
@@ -391,7 +389,6 @@
 "main-menu-account-login" = "လွၵ်ႉဢိၼ်ႇ";
 "main-menu-account-logout" = "လွၵ်ႉဢွၵ်ႉ";
 "main-menu-account-logout-are-you-sure" = "ၸဝ်ႈၵဝ်ႇတေလွၵ်ႉဢွၵ်ႉၼႆ လပ်ႉလွင်းယဝ်ႉႁႃႉ?";
-"main-menu-account-logout-cancel" = "ယုၵ်ႉလိူၵ်ႈ";
 "main-menu-account-title-logged-in" = "ၶဝ်ႈလွၵ်ႉဢိၼ်ႇဝႆႉၼင်ႇ $1";
 "main-menu-heading-legal" = "လွင်ႈႁူမ်ႇလူမ်ႈသုၼ်ႇတူဝ်လႄႈ ၶေႃႈမၼ်ႈၸႂ်";
 "main-menu-nearby" = "ႁိမ်းႁွမ်း";
@@ -400,7 +397,6 @@
 "main-menu-terms-of-use" = "ၶေႃႈၽၢင်ႉလွင်ႈၸႂ်ႉတိုဝ်း";
 "main-menu-title" = "ၼမ်လိူဝ်";
 "main-menu-zero-faq" = "ၶေႃႈၵႆႉထၢမ်တွပ်ႇ တႃႇ ဝီႇၶီႇၽီးတီးယႃး သုၼ်";
-"menu-cancel-accessibility-label" = "ဢမ်ႇႁဵတ်း";
 "more-languages-tooltip-description" = "ၶူၼ်ႉႁႃ ဝီႇၶီႇၽီးတီးယႃး ၼႂ်းၽႃႇသႃႇၵႂၢမ်း 300 လိူဝ်";
 "more-languages-tooltip-title" = "ထႅမ်သႂ်ႇ ၽႃႇသႃႇ";
 "move-articles-to-reading-list" = "ၶၢႆႉ {{PLURAL:$1|$1 ပွင်ႈၵႂၢမ်း|$1 ပွင်ႈၵႂၢမ်း}} ၸူး သဵၼ်ႈမၢႆလူ";

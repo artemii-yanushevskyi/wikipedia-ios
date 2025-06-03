@@ -54,7 +54,6 @@
 "button-next" = "Seguent";
 "button-ok" = "D’acòrdi";
 "button-publish" = "Publicar";
-"button-read-now" = "Legir ara";
 "button-report-a-bug" = "Senhalar una error";
 "button-save-for-later" = "Enregistrar per mai tard";
 "button-saved-for-later" = "Enregistrat per mai tard";
@@ -115,7 +114,6 @@
 "main-menu-account-login" = "Connexion";
 "main-menu-account-logout" = "Desconnexion";
 "main-menu-account-logout-are-you-sure" = "Sètz segur que vos volètz desconnectar ?";
-"main-menu-account-logout-cancel" = "Anullar";
 "main-menu-account-title-logged-in" = "Connectat en tant que $1.";
 "main-menu-heading-legal" = "Confidencialitat e condicions";
 "main-menu-nearby" = "A proximitat";
@@ -124,7 +122,6 @@
 "main-menu-terms-of-use" = "Condicions d'utilizacion";
 "main-menu-title" = "Mai";
 "main-menu-zero-faq" = "FAQ de Wikipèdia Zèro";
-"menu-cancel-accessibility-label" = "Anullar";
 "move-articles-to-reading-list" = "Trasladar {{PLURAL:$1|$1 article|$1 articles}} a la lista de lectura";
 "navbar-title-mode-edit-wikitext-preview" = "Apercebut";
 "nearby-distance-label-feet" = "$1 pès";
@@ -186,6 +183,7 @@
 "table-of-contents-close-accessibility-label" = "Tampar l'ensenhador";
 "table-of-contents-heading" = "Contenguts";
 "talk-page-unsubscribe-to-topic" = "Annular l'inscripcion";
+"talk-pages-topic-reply-onboarding-title" = "Paginas de discussion";
 "two-factor-login-title" = "Se connectar a vòstre compte";
 "watchlist-change-expiry-option-one-month" = "1 mes";
 "watchlist-filter" = "Filtrar";

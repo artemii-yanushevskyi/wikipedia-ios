@@ -3,6 +3,7 @@ import SwiftUI
 
 public enum WMFFont {
 
+    case body
     case boldCallout
     case boldCaption1
     case boldFootnote
@@ -17,6 +18,7 @@ public enum WMFFont {
     case boldSubheadline
     case boldTitle1
     case boldTitle3
+    case georgiaCallout
     case callout
     case caption1
     case editorHeading
@@ -42,10 +44,13 @@ public enum WMFFont {
     case subheadline
     case title1
     case title3
+    case xxlTitleBold
 
     public static func `for`(_ font: WMFFont, compatibleWith traitCollection: UITraitCollection = WMFAppEnvironment.current.traitCollection) -> UIFont {
 
         switch font {
+        case .body:
+            return UIFont.preferredFont(forTextStyle: .body, compatibleWith: traitCollection)
         case .boldCallout:
             guard let descriptor = UIFontDescriptor.preferredFontDescriptor(withTextStyle: .callout, compatibleWith: traitCollection).withSymbolicTraits(.traitBold) else {
                 fatalError()
@@ -133,6 +138,9 @@ public enum WMFFont {
                 fatalError()
             }
             return UIFont(descriptor: descriptor, size: 0)
+            
+        case .georgiaCallout:
+            return UIFontMetrics(forTextStyle: .callout).scaledFont(for: UIFont(descriptor: UIFontDescriptor(name: "Georgia", size: 16), size: 0), compatibleWith: traitCollection)
 
         case .callout:
             return UIFont.preferredFont(forTextStyle: .callout, compatibleWith: traitCollection)
@@ -165,7 +173,7 @@ public enum WMFFont {
             return UIFontMetrics(forTextStyle: .title3).scaledFont(for: UIFont(descriptor: UIFontDescriptor(name: "Georgia", size: 20), size: 0), compatibleWith: traitCollection)
 
         case .headline:
-            return UIFont.preferredFont(forTextStyle: .headline, compatibleWith: traitCollection)
+            return UIFontMetrics(forTextStyle: .headline).scaledFont(for: UIFont.systemFont(ofSize: 17, weight: .regular), compatibleWith: traitCollection)
 
         case .italicCallout:
             guard let descriptor = UIFontDescriptor.preferredFontDescriptor(withTextStyle: .callout, compatibleWith: traitCollection).withSymbolicTraits(.traitItalic) else {
@@ -228,8 +236,10 @@ public enum WMFFont {
 
         case .title3:
             return UIFont.preferredFont(forTextStyle: .title3, compatibleWith: traitCollection)
+            
+        case .xxlTitleBold:
+            return UIFontMetrics(forTextStyle: .title3).scaledFont(for: UIFont.systemFont(ofSize: 40, weight: .bold), compatibleWith: traitCollection)
 
         }
     }
-
 }

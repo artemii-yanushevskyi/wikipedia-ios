@@ -5,6 +5,7 @@
 #import "WMFImageGalleryDetailOverlayView.h"
 @import CoreServices;
 @import UniformTypeIdentifiers;
+@import WMFComponents;
 
 // SINGLETONTODO - this whole file, find [MWKDataStore shared]
 
@@ -125,8 +126,8 @@ NS_ASSUME_NONNULL_BEGIN
         share.tintColor = [UIColor whiteColor];
         self.overlayView.rightBarButtonItem = share;
 
-        UIBarButtonItem *close = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"close"] style:UIBarButtonItemStylePlain target:self action:@selector(didTapCloseButton)];
-        close.tintColor = [UIColor whiteColor];
+        UIBarButtonItem *close = [[UIBarButtonItem alloc] initWithTitle:WMFCommonStrings.doneTitle style:UIBarButtonItemStylePlain target:self action:@selector(didTapCloseButton)];
+        close.tintColor = self.theme.colors.link;
         close.accessibilityLabel = [WMFCommonStrings closeButtonAccessibilityLabel];
         self.overlayView.leftBarButtonItem = close;
     }
@@ -134,10 +135,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (UIInterfaceOrientationMask)supportedInterfaceOrientations {
     return UIInterfaceOrientationMaskAll;
-}
-
-- (BOOL)shouldAutorotate {
-    return YES;
 }
 
 - (NSArray<id<NYTPhoto>> *)photos {
@@ -192,7 +189,11 @@ NS_ASSUME_NONNULL_BEGIN
 #pragma mark - Actions
 
 - (void)didTapCloseButton {
-    [self dismissViewControllerAnimated:YES completion:NULL];
+    [self dismissViewControllerAnimated:YES completion:^{
+        if ([self.dismissDelegate respondsToSelector:@selector(galleryDidDismiss:)]) {
+            [self.dismissDelegate galleryDidDismiss:self];
+        }
+    }];
 }
 
 - (void)didTapShareButton {
@@ -265,7 +266,16 @@ NS_ASSUME_NONNULL_BEGIN
     caption.infoTapCallback = ^{
         @strongify(self);
         if (imageInfo.filePageURL) {
-            [self wmf_navigateToURL:imageInfo.filePageURL.wmf_urlByPrependingSchemeIfSchemeless];
+            
+            // First dismiss self
+            [self dismissViewControllerAnimated:YES completion:^{
+                if ([self.dismissDelegate respondsToSelector:@selector(galleryDidTapInfoButton:)]) {
+                    [self.dismissDelegate galleryDidTapInfoButton:self];
+                }
+                
+                // then navigate to in-app web view
+                [self wmf_navigateToURL:imageInfo.filePageURL.wmf_urlByPrependingSchemeIfSchemeless];
+            }];
         }
     };
     @weakify(caption);
@@ -300,6 +310,12 @@ NS_ASSUME_NONNULL_BEGIN
     }
     WMFImageGalleryDetailOverlayView *detailOverlayView = (WMFImageGalleryDetailOverlayView *)maybeDetailOverlayView;
     detailOverlayView.maximumDescriptionHeight = size.height;
+}
+
+- (void)photosViewControllerDidDismiss:(NYTPhotosViewController *)photosViewController {
+    if ([self.dismissDelegate respondsToSelector:@selector(galleryDidDismiss:)]) {
+        [self.dismissDelegate galleryDidDismiss:self];
+    }
 }
 
 #pragma mark - WMFThemeable

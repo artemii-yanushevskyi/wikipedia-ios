@@ -1,4 +1,4 @@
-// Messages for Zazaki (Zazaki)
+// Messages for Dimli (Zazaki)
 // Exported from translatewiki.net
 // Author: 1917 Ekim Devrimi
 // Author: Asmen
@@ -30,6 +30,9 @@
 "action-share" = "Vıla ke";
 "action-share-accessibility" = "Vıla ke";
 "action-sort" = "Weçine";
+"activity-tab-neutral" = "Notr";
+"activity-tab-title" = "Fealiyet";
+"alert-temporary-account-learn-more" = "Tayêna bımuse.";
 "announcements-dismiss" = "Red ke";
 "article-delete" = "Bestere";
 "article-languages-filter-placeholder" = "Zıwan bıvin";
@@ -94,13 +97,11 @@
 "languages-title" = "Zıwani bıvurne";
 "main-menu-account-login" = "Cı kewe";
 "main-menu-account-logout" = "Bıveciye";
-"main-menu-account-logout-cancel" = "Bıtexelne";
 "main-menu-account-title-logged-in" = "Şıma zey $1 kewtê cı.";
 "main-menu-heading-legal" = "Nımnayışi u şerti";
 "main-menu-nearby" = "Nezdıra";
 "main-menu-terms-of-use" = "Şertê gurenayışi";
 "main-menu-title" = "Zêde";
-"menu-cancel-accessibility-label" = "Bıtexelne";
 "navbar-title-mode-edit-wikitext-preview" = "Verqayt";
 "nearby-distance-label-feet" = "$1 fit";
 "nearby-distance-label-km" = "$1 km";

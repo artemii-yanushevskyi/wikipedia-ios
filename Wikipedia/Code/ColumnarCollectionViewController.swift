@@ -1,7 +1,7 @@
-import UIKit
+import Foundation
 import WMF
 
-class ColumnarCollectionViewController: ViewController, ColumnarCollectionViewLayoutDelegate, UICollectionViewDataSourcePrefetching, CollectionViewFooterDelegate, HintPresenting {
+class ColumnarCollectionViewController: ThemeableViewController, ColumnarCollectionViewLayoutDelegate, UICollectionViewDataSourcePrefetching, CollectionViewFooterDelegate, HintPresenting {
     
     enum HeaderStyle {
         case sections
@@ -27,7 +27,6 @@ class ColumnarCollectionViewController: ViewController, ColumnarCollectionViewLa
         cv.isPrefetchingEnabled = true
         cv.prefetchDataSource = self
         cv.preservesSuperviewLayoutMargins = true
-        scrollView = cv
         return cv
     }()
 
@@ -35,23 +34,34 @@ class ColumnarCollectionViewController: ViewController, ColumnarCollectionViewLa
         return ColumnarCollectionViewLayoutManager(view: view, collectionView: collectionView)
     }()
     
+    open var addsCollectionView: Bool {
+        return true
+    }
+    
     deinit {
         NotificationCenter.default.removeObserver(self)
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.wmf_addSubviewWithConstraintsToEdges(collectionView)
+        
+        if addsCollectionView {
+            view.wmf_addSubviewWithConstraintsToEdges(collectionView)
+        }
+        
         layoutManager.register(CollectionViewHeader.self, forSupplementaryViewOfKind: UICollectionView.elementKindSectionHeader, withReuseIdentifier: CollectionViewHeader.identifier, addPlaceholder: true)
         layoutManager.register(CollectionViewFooter.self, forSupplementaryViewOfKind: UICollectionView.elementKindSectionFooter, withReuseIdentifier: CollectionViewFooter.identifier, addPlaceholder: true)
         collectionView.alwaysBounceVertical = true
-        extendedLayoutIncludesOpaqueBars = true
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillChangeFrame(_:)), name: UIWindow.keyboardWillChangeFrameNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillHide(_:)), name: UIWindow.keyboardWillHideNotification, object: nil)
     }
 
     @objc open func contentSizeCategoryDidChange(_ notification: Notification?) {
         collectionView.reloadData()
     }
 
+    var isFirstAppearance = true
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         if isFirstAppearance {
@@ -97,6 +107,28 @@ class ColumnarCollectionViewController: ViewController, ColumnarCollectionViewLa
             self.layout.invalidateLayout(with: invalidationContext)
         })
     }
+    
+    // MARK: Keyboard
+    
+    private(set) var keyboardFrame: CGRect? {
+            didSet {
+                if oldValue != keyboardFrame {
+                    scrollViewInsetsDidChange()
+                }
+            }
+        }
+    
+    @objc func keyboardWillChangeFrame(_ notification: Notification) {
+        if let window = view.window, let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+            let windowFrame = window.convert(endFrame, from: nil)
+            keyboardFrame = window.convert(windowFrame, to: view)
+        }
+    }
+    
+    @objc func keyboardWillHide(_ notification: Notification) {
+        keyboardFrame = nil
+        updateEmptyViewFrame()
+    }
 
     // MARK: HintPresenting
 
@@ -104,8 +136,7 @@ class ColumnarCollectionViewController: ViewController, ColumnarCollectionViewLa
     
     // MARK: - UIScrollViewDelegate
     
-    override func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-        super.scrollViewWillBeginDragging(scrollView)
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         hintController?.dismissHintDueToUserInteraction()
     }
     
@@ -170,9 +201,19 @@ class ColumnarCollectionViewController: ViewController, ColumnarCollectionViewLa
         isEmptyDidChange()
     }
     
-    private var emptyViewFrame: CGRect {
-        let insets = scrollView?.contentInset ?? UIEdgeInsets.zero
-        let frame = view.bounds.inset(by: insets)
+    private var emptyViewFrame: CGRect = .zero
+    
+    private func generateEmptyViewFrame() -> CGRect {
+        let insets = collectionView.adjustedContentInset
+        
+        var frame = view.bounds.inset(by: insets)
+        
+        if let keyboardFrame {
+            let amountOFKeyboardUnderView = keyboardFrame.maxY - view.bounds.height
+            let insetsFromKeyboard = UIEdgeInsets(top: 0, left: 0, bottom: keyboardFrame.height - amountOFKeyboardUnderView, right: 0)
+            frame = frame.inset(by: insetsFromKeyboard)
+        }
+        
         return frame
     }
 
@@ -189,9 +230,28 @@ class ColumnarCollectionViewController: ViewController, ColumnarCollectionViewLa
         }
     }
     
-    override func scrollViewInsetsDidChange() {
-        super.scrollViewInsetsDidChange()
-        wmf_setEmptyViewFrame(emptyViewFrame)
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        scrollViewInsetsDidChange()
+    }
+    
+    // MARK: - Scroll View Insets
+    
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        scrollViewInsetsDidChange()
+    }
+    
+    func scrollViewInsetsDidChange() {
+        updateEmptyViewFrame()
+    }
+    
+    func updateEmptyViewFrame() {
+        let newEmptyViewFrame = generateEmptyViewFrame()
+        if emptyViewFrame != newEmptyViewFrame {
+            emptyViewFrame = newEmptyViewFrame
+            wmf_setEmptyViewFrame(emptyViewFrame)
+        }
     }
     
     // MARK: - Themeable
@@ -240,11 +300,13 @@ class ColumnarCollectionViewController: ViewController, ColumnarCollectionViewLa
     
     var headerTitle: String?
     var headerSubtitle: String?
+    var removeTopHeaderSpacing = false
     
     open func configure(header: CollectionViewHeader, forSectionAt sectionIndex: Int, layoutOnly: Bool) {
         header.title = headerTitle
         header.subtitle = headerSubtitle
         header.style = .detail
+        header.removeDetailTopMargins = removeTopHeaderSpacing
         header.apply(theme: theme)
     }
 
@@ -321,8 +383,7 @@ class ColumnarCollectionViewController: ViewController, ColumnarCollectionViewLa
         return min(max(_maxViewed, percentViewed), 100)
     }
 
-    override func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        super.scrollViewDidScroll(scrollView)
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
         _maxViewed = max(_maxViewed, percentViewed)
     }
 
@@ -381,7 +442,7 @@ extension ColumnarCollectionViewController {
             return vc
         }
         return UIContextMenuConfiguration(identifier: nil, previewProvider: previewProvider) { (suggestedActions) -> UIMenu? in
-            guard let previewActions = (vc as? ArticleViewController)?.contextMenuItems else {
+            guard let previewActions = (vc as? ArticlePeekPreviewViewController)?.contextMenuItems else {
                 return nil
             }
             return UIMenu(title: "", image: nil, identifier: nil, options: [], children: previewActions)
@@ -390,13 +451,57 @@ extension ColumnarCollectionViewController {
 
     func collectionView(_ collectionView: UICollectionView, willPerformPreviewActionForMenuWith configuration: UIContextMenuConfiguration, animator: UIContextMenuInteractionCommitAnimating) {
 
-        guard let previewedViewController = animator.previewViewController else {
+        guard let peekVC = animator.previewViewController as? ArticlePeekPreviewViewController,
+            let navVC = navigationController else {
             assertionFailure("Should be able to find previewed VC")
             return
         }
         animator.addCompletion { [weak self] in
-            previewedViewController.wmf_removePeekableChildViewControllers()
-            self?.push(previewedViewController, animated: true)
+            
+            guard let self else { return }
+            
+            let coordinator = ArticleCoordinator(navigationController: navVC, articleURL: peekVC.articleURL, dataStore: MWKDataStore.shared(), theme: self.theme, source: .undefined)
+            coordinator.start()
         }
     }
 }
+
+extension ColumnarCollectionViewController: ArticlePreviewingDelegate {
+    @objc func readMoreArticlePreviewActionSelected(with peekController: ArticlePeekPreviewViewController) {
+        
+        guard let navVC = self.navigationController else {
+            return
+        }
+        
+        let coordinator = ArticleCoordinator(navigationController: navVC, articleURL: peekController.articleURL, dataStore: MWKDataStore.shared(), theme: theme, source: .undefined)
+        coordinator.start()
+    }
+    
+    @objc func saveArticlePreviewActionSelected(with peekController: ArticlePeekPreviewViewController, didSave: Bool, articleURL: URL) {
+        guard let eventLoggingEventValuesProviding = self as? MEPEventsProviding else {
+            return
+        }
+        
+        if didSave {
+            ReadingListsFunnel.shared.logSave(category: eventLoggingEventValuesProviding.eventLoggingCategory, label: eventLoggingEventValuesProviding.eventLoggingLabel, articleURL: articleURL)
+        } else {
+            ReadingListsFunnel.shared.logUnsave(category: eventLoggingEventValuesProviding.eventLoggingCategory, label: eventLoggingEventValuesProviding.eventLoggingLabel, articleURL: articleURL)
+        }
+    }
+    
+    @objc func shareArticlePreviewActionSelected(with peekController: ArticlePeekPreviewViewController, shareActivityController: UIActivityViewController) {
+        present(shareActivityController, animated: true, completion: nil)
+    }
+    
+    @objc func viewOnMapArticlePreviewActionSelected(with peekController: ArticlePeekPreviewViewController) {
+        let placesURL = NSUserActivity.wmf_URLForActivity(of: .places, withArticleURL: peekController.articleURL)
+        UIApplication.shared.open(placesURL, options: [:], completionHandler: nil)
+    }
+    
+    func openInNewTabArticlePreviewActionSelected(with peekController: ArticlePeekPreviewViewController) {
+        guard let navVC = navigationController else { return }
+        let articleCoordinator = ArticleCoordinator(navigationController: navVC, articleURL: peekController.articleURL, dataStore: MWKDataStore.shared(), theme: theme, source: .undefined, tabConfig: .appendArticleAndAssignNewTabAndSetToCurrent)
+        articleCoordinator.start()
+    }
+}
+

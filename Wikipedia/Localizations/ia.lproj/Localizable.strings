@@ -4,40 +4,6 @@
 // Author: McDutchie
 // Author: Tsevener
 
-"aaald-added-text-description-2" = "$1 addite";
-"aaald-article-description-updated-description" = "Description del articulo actualisate";
-"aaald-article-insert-header" = "Actualisationes significative";
-"aaald-article-insert-last-updated" = "Ultime actualisation";
-"aaald-article-insert-new-changes" = "Nove cambiamentos";
-"aaald-article-insert-read-more" = "Leger plus actualisationes";
-"aaald-characters-text-description" = "{{PLURAL:$1|0=characteres|character|characteres}}";
-"aaald-deleted-text-description-2" = "$1 delite";
-"aaald-error-subitle" = "Refresca pro tentar de novo";
-"aaald-error-title" = "Impossibile cargar historia in linea del articulo";
-"aaald-many-sections-description" = "in $1 sectiones";
-"aaald-multiple-changes-description" = "Plure cambiamentos facite";
-"aaald-multiple-references-added-description" = "Plure referentias addite";
-"aaald-new-book-reference-title" = "Libro";
-"aaald-new-discussion" = "Nove discussion";
-"aaald-new-journal-reference-database" = "via $1";
-"aaald-new-journal-reference-title" = "Periodico";
-"aaald-new-journal-reference-volume" = "Volumine $1:";
-"aaald-new-news-reference-retrieved-date" = "$1 recuperate";
-"aaald-new-news-reference-title" = "Novas";
-"aaald-new-talk-topic-description-format" = "$1 sur iste articulo";
-"aaald-new-website-reference-archive-date-text" = "desde le original sur $1";
-"aaald-new-website-reference-archive-url-text" = "URL de Archive.org";
-"aaald-new-website-reference-title" = "Sito web";
-"aaald-numerical-multiple-references-added-description" = "{{PLURAL:$1|0=0 referentias|$1 referentia|$1 referentias}} addite";
-"aaald-one-section-description" = "in le section $1";
-"aaald-revision-by-anonymous" = "Modification de usator anonyme";
-"aaald-revision-userInfo" = "Modificate per $1 ($2 modificationes)";
-"aaald-single-reference-added-description" = "Referentia addite";
-"aaald-small-change-description" = "{{PLURAL:$1|0=Necun cambiamento minor facite|$1 cambiamento minor facite|$1 cambiamentos minor facite}}";
-"aaald-summary-title" = "{{PLURAL:$1|0=0 cambiamentos|$1 cambiamento|$1 cambiamentos}} de {{PLURAL:$2|0=0 contributores|$2 contributor|$2 contributores}} in {{PLURAL:$3|0=0 dies|$3 die|$3 dies}}";
-"aaald-two-sections-description" = "in le sectiones $1 e $2";
-"aaald-vandalism-revert-description" = "Vandalismo suspectate revertite";
-"aaald-view-full-history-button" = "Vider le historia complete del articulo";
 "about-content-license" = "Licentia del contento";
 "about-content-license-details" = "Si non alteremente specificate, le contento es disponibile sub un $1.";
 "about-content-license-details-share-alike-license" = "licentia Creative Commons Attribution-CompartiSimile";
@@ -110,9 +76,7 @@
 "action-update" = "Actualisar";
 "add-articles-to-reading-list" = "Adder {{PLURAL:$1|$1 articulo|$1 articulos}} al lista de lectura";
 "advanced-settings-title" = "Parametros avantiate";
-"alt-text-add-button-title" = "Adder";
-"alt-text-do-not-add-button-title" = "Non adder";
-"alt-text-modal-title" = "Adder imagine sin texto alternative?";
+"alt-text-feedback-survey-toast-title" = "Opinion inviate";
 "announcements-dismiss" = "Clauder";
 "app-store-keywords" = "Wikipedia, referentia, wiki, encyclopedia, info, cognoscentia, recerca, information, explorar, apprender";
 "app-store-release-notes" = "Un canal Explorar completemente personalisabile e plus facile a leger. Localisation, melior prestationes e correction de errores.";
@@ -148,7 +112,6 @@
 "button-ok" = "OK";
 "button-publish" = "Publicar";
 "button-publish-anyway" = "Publicar totevia";
-"button-read-now" = "Leger ora";
 "button-report-a-bug" = "Reportar un defecto";
 "button-save-for-later" = "Salveguardar pro plus tarde";
 "button-saved-for-later" = "Salveguardate pro plus tarde";
@@ -163,6 +126,9 @@
 "clearing-cache-in-progress" = "Radimento del cache in progresso.";
 "close-button-accessibility-label" = "Clauder";
 "compass-direction" = "a $1 horas";
+"confirm-donation-history-deletion-subtitle" = "Isto se applicara solmente al donationes facite desde iste apparato.";
+"confirm-donation-history-deletion-title" = "Confirmar deletion";
+"confirmed-donation-history-deletion" = "Historia local delite";
 "continue-button-title" = "Continuar";
 "continue-reading-empty-description" = "Explorar Wikipedia pro plus articulos a legerr";
 "continue-reading-empty-title" = "Necun articulo legite recentemente";
@@ -204,7 +170,10 @@
 "description-welcome-descriptions-title" = "Descriptiones de articulos";
 "description-welcome-promise-title" = "Quando io comencia, io promitte non abusar de iste function";
 "description-welcome-start-editing-button" = "Comenciar a modificar";
-"developer-settings-enable-alt-text-experiment-en" = "Activar experimento Alt Text pro Wikipedia interlingua.";
+"developer-settings" = "Parametros de disveloppator";
+"developer-settings-enable-year-in-review" = "Activar le Summario del anno";
+"developer-settings-send-analytics-to-wmflabs" = "Inviar informationes analytic a wmflabs.";
+"developer-settings-suppress-image-rec-post" = "Non publicar le modification de recommendationes de imagine.";
 "diff-article-revision-history" = "Historia de versiones del articulo";
 "diff-change-added" = "Addition: $1. Fin del addition.";
 "diff-change-paragraph-lines-moved-down" = "Paragrapho displaciate a basso de {{PLURAL:$1|0=0 lineas|$1 linea|$1 lineas}}. Va al nove position.";
@@ -272,6 +241,7 @@
 "donate-help-other-ways-to-give" = "Altere modos de donation";
 "donate-help-problems-donating" = "Problemas de donar?";
 "donate-help-tax-deductibility-information" = "Information sur le deductibilitate fiscal";
+"donate-history-delete" = "Deler le historia local de donationes";
 "donate-later-title" = "Nos te lo recordara de novo deman.";
 "donate-maximum-error-text" = "Nos non pote acceptar donationes in excesso de $2 $1 per nostre sito web. Per favor contacta nostre personal de donos major a benefactors@wikimedia.org.";
 "donate-minimum-error-text" = "Per favor selige un amonta (minimo $2 $1).";
@@ -568,8 +538,6 @@
 "image-rec-empty-title" = "Il non ha altere imagines suggerite disponibile in iste momento.";
 "image-rec-error-subtitle" = "Qualcosa ha vadite mal.";
 "image-rec-error-title" = "Impossibile cargar le pagina";
-"image-rec-feature-announce-body" = "Decider si un imagine es addite a un articulo de Wikipedia. Le carta ‘Adder un imagine’ se trova in le fluxo ‘Explorar’.";
-"image-rec-feature-announce-title" = "Tentar ‘Adder un imagine’";
 "image-rec-onboarding-item-1-body" = "Decider si un imagine suggerite debe esser inserite in un articulo de Wikipedia.";
 "image-rec-onboarding-item-1-title" = "Vider un suggestion";
 "image-rec-onboarding-item-2-body" = "Suggestiones es generate per machina e tu usara tu judicamento pro decider si acceptar o rejectar los.";
@@ -604,6 +572,7 @@
 "image-recommendations-email-title" = "Reporto de problema: Function Adder un imagine";
 "image-recs-no-title" = "No";
 "image-recs-not-sure-title" = "Non secur";
+"image-recs-time-warning-message" = "Per favor revide le articulo pro comprender su subjecto e inspectar le imagine";
 "image-recs-yes-title" = "Si";
 "import-shared-reading-list-default-title" = "Mi lista de lectura";
 "import-shared-reading-list-survey-prompt-button-cancel" = "Non ora";
@@ -669,7 +638,6 @@
 "main-menu-account-logout" = "Clauder session";
 "main-menu-account-logout-are-you-sure" = "Es tu secur de voler clauder le session?";
 "main-menu-account-logout-are-you-sure-message" = "Clauder le session delera tu datos de conto immagazinate localmente (notificationes e messages), ma le datos de tu conto continuara a esser disponibile sur le web e essera rediscargate si tu reaperi session.";
-"main-menu-account-logout-cancel" = "Cancellar";
 "main-menu-account-title-logged-in" = "Authenticate como $1";
 "main-menu-heading-legal" = "Confidentialitate e conditiones";
 "main-menu-nearby" = "A proximitate";
@@ -678,7 +646,6 @@
 "main-menu-terms-of-use" = "Conditiones de uso";
 "main-menu-title" = "Plus";
 "main-menu-zero-faq" = "FAQ de Wikipedia Zero";
-"menu-cancel-accessibility-label" = "Cancellar";
 "more-languages-tooltip-description" = "Cercar in Wikipedia in plus de 300 linguas";
 "more-languages-tooltip-title" = "Adder linguas";
 "more-menu" = "Plus";
@@ -728,7 +695,6 @@
 "notifications-center-go-to-article" = "Articulo";
 "notifications-center-go-to-article-talk-format" = "Pagina de discussion de $1";
 "notifications-center-go-to-diff" = "Diff";
-"notifications-center-go-to-talk-page" = "Pagina de discussion";
 "notifications-center-go-to-user-page" = "Pagina de usator de $1";
 "notifications-center-go-to-wikidata-item" = "Elemento Wikidata";
 "notifications-center-go-to-your-talk-page" = "Tu pagina de discussion";
@@ -835,7 +801,7 @@
 "on-this-day-sub-title-for-date-from-language-wikipedia" = "Le $1 sur Wikipedia in $2";
 "on-this-day-title" = "In iste die";
 "original-tab-button-popover-description" = "Tocca le 'W' pro retornar al scheda de ubi tu comenciava";
-"page-history-anonymous-edits" = "modificationes anonyme";
+// Fuzzy
 "page-history-bot-edits" = "modificationes per robot";
 "page-history-compare-accessibility-hint" = "Tocca pro seliger duo versiones a comparar";
 "page-history-compare-title" = "Comparar";
@@ -850,7 +816,6 @@
 "page-history-revision-time-accessibility-label" = "Version facite le $1";
 "page-history-revisions-comparison-warning" = "Solmente duo versiones pote esser seligite";
 "page-history-stats-text" = "$1 {{PLURAL:$1|modification|modificationes}} desde $2";
-"page-history-user-edits" = "modificationes de usatores";
 "page-issues" = "Problemas con le pagina";
 "page-location" = "Vider sur un carta";
 "page-protected-can-not-edit" = "Tu non ha le derectos pro modificar iste pagina";
@@ -902,6 +867,13 @@
 "preference-summary-eventlogging-opt-in" = "Permitter que le Fundation Wikimedia collige information sur como tu usa le application pro meliorar lo";
 "privacy-policy-title" = "Politica de confidentialitate";
 "problem-with-feature-title" = "Problema de functionalitate";
+"profile-button-accessibility-hint" = "Naviga verso le vista de profilo.";
+"profile-button-accessibility-label" = "Profilo";
+"profile-button-badge-accessibility-label" = "Profilo con insignia non legite";
+"profile-page-donate-subtext" = "O appoia Wikipedia con un donation pro mantener lo gratuite e accessibile a tote le mundo.";
+"profile-page-join-subtext" = "Crea un conto de Wikipedia pro traciar tu contributiones, salveguardar articulos foras de linea, e synchronisar inter apparatos.";
+"profile-page-join-title" = "Aperir session / Adherer a Wikipedia";
+"profile-page-logged-out-year-in-review-subtext" = "Aperi session o crea un conto pro obtener un summario del anno meliorate le proxime anno";
 "project-name-mediawiki" = "MediaWiki";
 "project-name-wikibooks" = "Wikilibros";
 "project-name-wikidata" = "Wikidata";
@@ -1098,6 +1070,10 @@
 "sort-by-recently-added-action" = "Recentemente addite";
 "sort-by-title-action" = "Titulo";
 "suggested-edits-title" = "Modificationes suggerite";
+"survey-instructions" = "Selige un o plus optiones";
+"survey-other-placeholder" = "Altere";
+"survey-submit" = "Submitter";
+"survey-title" = "Motivo";
 "table-of-contents-button-label" = "Tabula de contento";
 "table-of-contents-close-accessibility-hint" = "Clauder";
 "table-of-contents-close-accessibility-label" = "Clauder tabula de contento";
@@ -1151,7 +1127,6 @@
 "talk-page-subscription-failed-alert" = "Le abonamento a iste topico ha fallite. Per favor tenta lo de novo.";
 "talk-page-title-article-talk" = "Discussion de articulo";
 "talk-page-title-user-talk" = "Discussion de usator";
-"talk-page-topic-close-button-hint" = "Clauder nove topico";
 "talk-page-topic-compose-terms-and-licenses-ccsa4" = "Publicante le cambiamentos, tu accepta le $1Conditiones de uso$2 e libera irrevocabilemente tu contribution sub le licentias $3CC BY-SA 4.0$4 e $5GFDL$6.";
 "talk-page-unsubscribe-to-topic" = "Disabonar me";
 "talk-page-unsubscribed-alert-subtitle" = "Tu non recipera plus notificationes sur nove commentos in iste topico.";
@@ -1324,3 +1299,8 @@
 "wikitext-upload-save-sign-in" = "Aperir session";
 "wikitext-upload-save-terms-and-licenses-ccsa4" = "Publicante le cambiamentos, tu accepta le $1conditiones de uso$2 e tu libera irrevocabilemente tu contribution sub le licentias $3CC BY-SA 4.0$4 e $5GFDL$6. Tu accepta que un hyperligamine o URL es attribution sufficiente pro le licentia Creative Commons.";
 "wikitext-upload-save-terms-name" = "Conditiones de uso";
+"year-in-review-base-reading-title" = "Wikipedia esseva disponibile in plus de 300 linguas";
+"year-in-review-button-title" = "Summario del anno";
+"year-in-review-donate" = "Donar";
+"year-in-review-feature-announcement-title" = "Explorar tu summario del anno de Wikipedia";
+"year-in-review-feature-explore-body-personalized" = "Vide perspectivas sur le articulos que tu ha legite in le app de Wikipedia e le modificationes que tu ha facite in 2024. Tu historia de lectura es guardate secur. Le perspectivas de lectura es calculate usante datos immagazinate localmente sur tu apparato.";

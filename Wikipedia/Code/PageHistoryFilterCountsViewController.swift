@@ -1,14 +1,15 @@
 import UIKit
+import WMFComponents
 
-protocol PageHistoryFilterCountsViewControllerDelegate: AnyObject {
-    func didDetermineFilterCountsAvailability(_ available: Bool, viewController: PageHistoryFilterCountsViewController)
+protocol PageHistoryFilterCountsViewDelegate: AnyObject {
+    func didDetermineFilterCountsAvailability(_ available: Bool, view: PageHistoryFilterCountsView)
 }
 
-class PageHistoryFilterCountsViewController: UIViewController {
+class PageHistoryFilterCountsView: UIView {
     private let activityIndicator = UIActivityIndicatorView(style: .large)
     private let collectionView = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewFlowLayout())
 
-    weak var delegate: PageHistoryFilterCountsViewControllerDelegate?
+    weak var delegate: PageHistoryFilterCountsViewDelegate?
     var theme = Theme.standard
 
     private var counts: [Count] = []
@@ -21,23 +22,23 @@ class PageHistoryFilterCountsViewController: UIViewController {
                 activityIndicator.stopAnimating()
             }
             guard let editCounts = editCountsGroupedByType else {
-                delegate?.didDetermineFilterCountsAvailability(false, viewController: self)
+                delegate?.didDetermineFilterCountsAvailability(false, view: self)
                 return
             }
-            if let userEdits = editCounts[.userEdits]?.count {
-                counts.append(Count(title: WMFLocalizedString("page-history-user-edits", value: "user edits", comment: "Text for view that shows many edits were made by logged-in users"), image: UIImage(named: "user-edit"), count: userEdits))
+            if let loggedInEdits = editCounts[.customLoggedIn]?.count {
+                counts.append(Count(title: WMFLocalizedString("page-history-logged-in-edits", value: "logged-in", comment: "Text for view that shows many edits were made by logged-in users"), image: UIImage(named: "user-edit"), count: loggedInEdits))
             }
-            if let anonEdits = editCounts[.anonymous]?.count {
-                counts.append(Count(title: WMFLocalizedString("page-history-anonymous-edits", value: "anon edits", comment: "Text for view that shows many edits were made by anonymous users"), image: UIImage(named: "anon"), count: anonEdits))
+            if let unregisteredEdits = editCounts[.customUnregistered]?.count {
+                counts.append(Count(title: WMFLocalizedString("page-history-unregistered-edits", value: "unregistered", comment: "Text for view that shows many edits were made by unregistered users"), image: WMFIcon.temp, count: unregisteredEdits))
             }
             if let botEdits = editCounts[.bot]?.count {
-                counts.append(Count(title: WMFLocalizedString("page-history-bot-edits", value: "bot edits", comment: "Text for view that shows many edits were made by bots"), image: UIImage(named: "bot"), count: botEdits))
+                counts.append(Count(title: WMFLocalizedString("page-history-bot-edits", value: "bot", comment: "Text for view that shows many edits were made by bots"), image: UIImage(named: "bot"), count: botEdits))
             }
             if let minorEdits = editCounts[.minor]?.count {
                 counts.append(Count(title: WMFLocalizedString("page-history-minor-edits", value: "minor edits", comment: "Text for view that shows many edits were marked as minor edits"), image: UIImage(named: "m"), count: minorEdits))
             }
             countOfColumns = CGFloat(counts.count)
-            delegate?.didDetermineFilterCountsAvailability(!counts.isEmpty, viewController: self)
+            delegate?.didDetermineFilterCountsAvailability(!counts.isEmpty, view: self)
         }
     }
 
@@ -52,13 +53,21 @@ class PageHistoryFilterCountsViewController: UIViewController {
     }
 
     private lazy var collectionViewHeightConstraint = collectionView.heightAnchor.constraint(equalToConstant: 60)
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
+    
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setup()
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    private func setup() {
         collectionView.dataSource = self
         collectionView.register(UINib(nibName: "PageHistoryFilterCountCollectionViewCell", bundle: nil), forCellWithReuseIdentifier: PageHistoryFilterCountCollectionViewCell.identifier)
         collectionViewHeightConstraint.isActive = true
-        view.wmf_addSubviewWithConstraintsToEdges(collectionView)
+        wmf_addSubviewWithConstraintsToEdges(collectionView)
 
         addActivityIndicator()
         activityIndicator.color = theme.isDark ? .white : .gray
@@ -74,19 +83,11 @@ class PageHistoryFilterCountsViewController: UIViewController {
 
     private func addActivityIndicator() {
         activityIndicator.translatesAutoresizingMaskIntoConstraints = false
-        view.insertSubview(activityIndicator, aboveSubview: collectionView)
+        insertSubview(activityIndicator, aboveSubview: collectionView)
         NSLayoutConstraint.activate([
-            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor)
+            activityIndicator.centerYAnchor.constraint(equalTo: centerYAnchor),
+            activityIndicator.centerXAnchor.constraint(equalTo: centerXAnchor)
         ])
-    }
-
-    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
-        super.viewWillTransition(to: size, with: coordinator)
-        coordinator.animate(alongsideTransition: { _ in
-            self.collectionView.collectionViewLayout.invalidateLayout()
-            self.calculateSizes()
-        })
     }
 
     private var countOfColumns: CGFloat = 4 {
@@ -117,7 +118,7 @@ class PageHistoryFilterCountsViewController: UIViewController {
     }
 }
 
-extension PageHistoryFilterCountsViewController: UICollectionViewDataSource {
+extension PageHistoryFilterCountsView: UICollectionViewDataSource {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         return counts.count
     }
@@ -138,14 +139,11 @@ extension PageHistoryFilterCountsViewController: UICollectionViewDataSource {
 
 }
 
-extension PageHistoryFilterCountsViewController: Themeable {
+extension PageHistoryFilterCountsView: Themeable {
     func apply(theme: Theme) {
         self.theme = theme
-        guard viewIfLoaded != nil else {
-            return
-        }
-        view.backgroundColor = theme.colors.paperBackground
-        collectionView.backgroundColor = view.backgroundColor
+        backgroundColor = theme.colors.paperBackground
+        collectionView.backgroundColor = backgroundColor
         activityIndicator.color = theme.isDark ? .white : .gray
     }
 }

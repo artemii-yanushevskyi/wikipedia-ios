@@ -6,7 +6,7 @@ protocol ReferenceViewControllerDelegate: AnyObject {
     func referenceViewControllerUserDidNavigateBackToReference(_ vc: ReferenceViewController)
 }
 
-class ReferenceViewController: ViewController {
+class ReferenceViewController: ThemeableViewController {
     weak var delegate: ReferenceViewControllerDelegate?
     
     var referenceId: String? = nil
@@ -24,20 +24,52 @@ class ReferenceViewController: ViewController {
         navigationItem.title = String.localizedStringWithFormat(titleFormat, referenceLinkText)
     }
     
-    func setupNavbar() {
-        navigationBar.displayType = .modal
+    private lazy var customNavigationBar: UINavigationBar = {
+        let navigationBar = UINavigationBar()
+        navigationBar.translatesAutoresizingMaskIntoConstraints = false
+        return navigationBar
+    }()
+    
+    func setupCustomNavbar() {
         updateTitle()
         navigationItem.rightBarButtonItem = closeButton
         navigationItem.leftBarButtonItem = backToReferenceButton
+        
+        view.addSubview(customNavigationBar)
+        NSLayoutConstraint.activate([
+            view.safeAreaLayoutGuide.topAnchor.constraint(equalTo: customNavigationBar.topAnchor),
+            view.leadingAnchor.constraint(equalTo: customNavigationBar.leadingAnchor),
+            view.trailingAnchor.constraint(equalTo: customNavigationBar.trailingAnchor)
+        ])
+        
+        customNavigationBar.items = [navigationItem]
+        
+        // Insert UIView covering below navigation bar, but above collection view. This hides collection view content beneath safe area.
+        let overlayView = UIView()
+        overlayView.translatesAutoresizingMaskIntoConstraints = false
+        overlayView.backgroundColor = theme.colors.paperBackground
+        view.addSubview(overlayView)
+        NSLayoutConstraint.activate([
+            view.topAnchor.constraint(equalTo: overlayView.topAnchor),
+            view.leadingAnchor.constraint(equalTo: overlayView.leadingAnchor),
+            view.trailingAnchor.constraint(equalTo: overlayView.trailingAnchor),
+            view.safeAreaLayoutGuide.topAnchor.constraint(equalTo: overlayView.bottomAnchor)
+        ])
+        
         apply(theme: self.theme)
     }
     
     // MARK: View Lifecycle
     
     override func viewDidLoad() {
-        navigationMode = .forceBar
         super.viewDidLoad()
-        setupNavbar()
+        setupCustomNavbar()
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        navigationItem.largeTitleDisplayMode = .never
     }
     
     // MARK: Actions
@@ -48,7 +80,7 @@ class ReferenceViewController: ViewController {
         return button
     }()
     lazy var closeButton: UIBarButtonItem = {
-        let button = UIBarButtonItem(image: UIImage(named: "close-inverse"), style: .plain, target: self, action: #selector(closeButtonPressed))
+        let button = UIBarButtonItem(title: CommonStrings.doneTitle, style: .plain, target: self, action: #selector(closeButtonPressed))
         button.accessibilityLabel = CommonStrings.closeButtonAccessibilityLabel
         return button
     }()
@@ -68,7 +100,14 @@ class ReferenceViewController: ViewController {
         guard viewIfLoaded != nil else {
             return
         }
-        closeButton.tintColor = theme.colors.secondaryText
+        closeButton.tintColor = theme.colors.link
         backToReferenceButton.tintColor = theme.colors.link
+        
+        customNavigationBar.setBackgroundImage(theme.navigationBarBackgroundImage, for: .default)
+        customNavigationBar.titleTextAttributes = theme.navigationBarTitleTextAttributes
+        customNavigationBar.isTranslucent = false
+        customNavigationBar.barTintColor = theme.colors.chromeBackground
+        customNavigationBar.shadowImage = theme.navigationBarShadowImage
+        customNavigationBar.tintColor = theme.colors.chromeText
     }
 }

@@ -20,7 +20,7 @@ class SchemeHandler: NSObject {
     
     private let cacheQueue: OperationQueue = OperationQueue()
     private let pageLoadMeasurementUrlString = "page/mobile-html/"
-    
+
     required init(scheme: String, session: Session) {
         self.scheme = scheme
         self.session = session
@@ -203,7 +203,11 @@ private extension SchemeHandler {
                 urlSchemeTask.didReceive(data)
                 self.didReceiveDataCallback?(urlSchemeTask, data)
             }
-        }, success: { [weak urlSchemeTask] usedPermanentCache in
+        }, success: { [weak urlSchemeTask, weak self] usedPermanentCache in
+            
+            guard let self else {
+                return
+            }
             
             DispatchQueue.main.async {
                 guard let urlSchemeTask = urlSchemeTask else {

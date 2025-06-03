@@ -73,7 +73,6 @@
 "button-next" = "Saterusna";
 "button-ok" = "Heug";
 "button-publish" = "Pedalkeun";
-"button-read-now" = "Baca ayeuna";
 "button-report-a-bug" = "Laporkeun bug";
 "button-save-for-later" = "Simpen jang engké";
 "button-saved-for-later" = "Disimpen jang engké";
@@ -181,7 +180,6 @@
 "main-menu-account-login" = "Asup log";
 "main-menu-account-logout" = "Kaluar log";
 "main-menu-account-logout-are-you-sure" = "Anjeun yakin rék kaluar log?";
-"main-menu-account-logout-cancel" = "Bolay";
 "main-menu-account-title-logged-in" = "Geus asup log minangka $1";
 "main-menu-heading-legal" = "Privasi jeung Katangtuan";
 "main-menu-nearby" = "Sabudeureun";
@@ -190,7 +188,6 @@
 "main-menu-terms-of-use" = "Katangtuan Pamakéan";
 "main-menu-title" = "Lianna";
 "main-menu-zero-faq" = "NLD Wikipédia Zéro";
-"menu-cancel-accessibility-label" = "Bolay";
 "navbar-title-mode-edit-wikitext-preview" = "Pramidang";
 "nearby-distance-label-feet" = "$1 kaki";
 "nearby-distance-label-km" = "$1 km";

@@ -20,8 +20,6 @@ import WMFData
 struct RoutingUserInfoKeys {
     static let talkPageReplyText = "talk-page-reply-text"
     static let source = "source"
-    static let campaignArticleURL = "campaign-article-url"
-    static let campaignMetricsID = "campaign-metrics-id"
 }
 
 enum RoutingUserInfoSourceValue: String {
@@ -35,6 +33,7 @@ enum RoutingUserInfoSourceValue: String {
     case inAppWebView
     case watchlist
     case unknown
+    case profile
 }
 
 @objc(WMFViewControllerRouter)
@@ -66,26 +65,15 @@ class ViewControllerRouter: NSObject {
             } else if let createReadingListVC = viewController as? CreateReadingListViewController,
                       createReadingListVC.isInImportingMode {
 
-                let createReadingListNavVC = WMFThemeableNavigationController(rootViewController: createReadingListVC, theme: self.appViewController.theme)
+                
+                let createReadingListNavVC =
+                WMFComponentNavigationController(rootViewController: createReadingListVC, modalPresentationStyle: .overFullScreen)
+
                 navigationController.present(createReadingListNavVC, animated: true, completion: completion)
             } else {
                 navigationController.pushViewController(viewController, animated: true)
                 completion()
             }
-        }
-
-        // For Article as a Living Doc modal - fix the nav bar in place
-        if navigationController.children.contains(where: { $0 is ArticleAsLivingDocViewController }) {
-            if let vc = viewController as? SinglePageWebViewController, navigationController.modalPresentationStyle == .pageSheet {
-                vc.doesUseSimpleNavigationBar = true
-                vc.navigationBar.isBarHidingEnabled = false
-            }
-        }
-        
-        // pass along doesUseSimpleNavigationBar SinglePageWebViewController settings to the next one if needed
-        if let lastWebVC = navigationController.children.last as? SinglePageWebViewController,
-           let nextWebVC = viewController as? SinglePageWebViewController {
-            nextWebVC.doesUseSimpleNavigationBar = lastWebVC.doesUseSimpleNavigationBar
         }
 
         if let presentedVC = navigationController.presentedViewController {
@@ -100,12 +88,15 @@ class ViewControllerRouter: NSObject {
     @objc(routeURL:userInfo:completion:)
     public func route(_ url: URL, userInfo: [AnyHashable: Any]? = nil, completion: @escaping () -> Void) -> Bool {
         let theme = appViewController.theme
-        let loggedInUsername = MWKDataStore.shared().authenticationManager.loggedInUsername
-        let destination = router.destination(for: url, loggedInUsername: loggedInUsername)
+        
+        let authManager = MWKDataStore.shared().authenticationManager
+        let permanentUsername = authManager.authStatePermanentUsername
+        
+        let destination = router.destination(for: url, permanentUsername: permanentUsername)
         switch destination {
-        case .article(let articleURL):
-            appViewController.swiftCompatibleShowArticle(with: articleURL, animated: true, completion: completion)
-            return true
+        case .article:
+            assertionFailure("Use Article Coordinator instead")
+            return false
         case .externalLink(let linkURL):
             appViewController.navigate(to: linkURL, useSafari: true)
             completion()
@@ -123,9 +114,8 @@ class ViewControllerRouter: NSObject {
             let diffContainerVC = DiffContainerViewController(siteURL: siteURL, theme: theme, fromRevisionID: fromRevID, toRevisionID: toRevID, articleTitle: nil, articleSummaryController: appViewController.dataStore.articleSummaryController, authenticationManager: appViewController.dataStore.authenticationManager)
             return presentOrPush(diffContainerVC, with: completion)
         case .inAppLink(let linkURL):
-            let campaignArticleURL = userInfo?[RoutingUserInfoKeys.campaignArticleURL] as? URL
-            let campaignMetricsID = userInfo?[RoutingUserInfoKeys.campaignMetricsID] as? String
-            let singlePageVC = SinglePageWebViewController(url: linkURL, theme: theme, campaignArticleURL: campaignArticleURL, campaignMetricsID: campaignMetricsID)
+            let config = SinglePageWebViewController.StandardConfig(url: linkURL, useSimpleNavigationBar: false)
+            let singlePageVC = SinglePageWebViewController(configType: .standard(config), theme: theme)
             return presentOrPush(singlePageVC, with: completion)
         case .audio(let audioURL):
             try? AVAudioSession.sharedInstance().setCategory(.playback)
@@ -135,7 +125,7 @@ class ViewControllerRouter: NSObject {
             return presentOrPush(vc, with: completion)
         case .talk(let linkURL):
             let source = source(from: userInfo)
-            guard let viewModel = TalkPageViewModel(pageType: .article, pageURL: linkURL, source: source, articleSummaryController: appViewController.dataStore.articleSummaryController, authenticationManager: appViewController.dataStore.authenticationManager, languageLinkController: appViewController.dataStore.languageLinkController) else {
+            guard let viewModel = TalkPageViewModel(pageType: .article, pageURL: linkURL, source: source, articleSummaryController: appViewController.dataStore.articleSummaryController, authenticationManager: appViewController.dataStore.authenticationManager, languageLinkController: appViewController.dataStore.languageLinkController, dataStore: appViewController.dataStore) else {
                 completion()
                 return false
             }
@@ -148,7 +138,7 @@ class ViewControllerRouter: NSObject {
             return presentOrPush(newTalkPage, with: completion)
         case .userTalk(let linkURL):
             let source = source(from: userInfo)
-            guard let viewModel = TalkPageViewModel(pageType: .user, pageURL: linkURL, source: source, articleSummaryController: appViewController.dataStore.articleSummaryController, authenticationManager: appViewController.dataStore.authenticationManager, languageLinkController: appViewController.dataStore.languageLinkController) else {
+            guard let viewModel = TalkPageViewModel(pageType: .user, pageURL: linkURL, source: source, articleSummaryController: appViewController.dataStore.articleSummaryController, authenticationManager: appViewController.dataStore.authenticationManager, languageLinkController: appViewController.dataStore.languageLinkController, dataStore: appViewController.dataStore) else {
                 completion()
                 return false
             }
@@ -166,7 +156,6 @@ class ViewControllerRouter: NSObject {
                 completion()
                 return false
             }
-            onThisDayVC.shouldShowNavigationBar = true
             if let index = indexOfSelectedEvent, let selectedEvent = onThisDayVC.events.first(where: { $0.index == NSNumber(value: index) }) {
                 onThisDayVC.initialEvent = selectedEvent
             }
@@ -221,9 +210,17 @@ class ViewControllerRouter: NSObject {
 
         return source
     }
-    
+
+    private func articleSource(from userInfo:[AnyHashable: Any]?) -> ArticleSource {
+        guard let sourceString = userInfo?[ArticleSourceUserInfoKeys.articleSource] as? Int,
+              let source = ArticleSource(rawValue: sourceString) else {
+            return .undefined
+        }
+        return source
+    }
+
     private func watchlistTargetNavigationController() -> UINavigationController? {
-        var targetNavigationController = appViewController.navigationController
+        var targetNavigationController: UINavigationController? = appViewController.currentTabNavigationController
         if let presentedNavigationController = appViewController.presentedViewController as? UINavigationController,
            presentedNavigationController.viewControllers[0] is WMFSettingsViewController {
             targetNavigationController = presentedNavigationController
@@ -330,9 +327,7 @@ class ViewControllerRouter: NSObject {
 
         let localizedStrings = WMFWatchlistViewModel.LocalizedStrings(title: CommonStrings.watchlist, filter: CommonStrings.watchlistFilter, userButtonUserPage: CommonStrings.userButtonPage, userButtonTalkPage: CommonStrings.userButtonTalkPage, userButtonContributions: CommonStrings.userButtonContributions, userButtonThank: CommonStrings.userButtonThank, emptyEditSummary: CommonStrings.emptyEditSummary, userAccessibility: CommonStrings.userTitle, summaryAccessibility: CommonStrings.editSummaryTitle, userAccessibilityButtonDiff: CommonStrings.watchlistGoToDiff, localizedProjectNames: watchlistFilterViewModel.localizedStrings.localizedProjectNames, byteChange: localizedByteChange,  htmlStripped: htmlStripped)
 
-        let presentationConfiguration = WMFWatchlistViewModel.PresentationConfiguration(showNavBarUponAppearance: true, hideNavBarUponDisappearance: true)
-
-        let viewModel = WMFWatchlistViewModel(localizedStrings: localizedStrings, presentationConfiguration: presentationConfiguration)
+        let viewModel = WMFWatchlistViewModel(localizedStrings: localizedStrings)
 
         let localizedStringsEmptyView = WMFEmptyViewModel.LocalizedStrings(title: CommonStrings.watchlistEmptyViewTitle, subtitle: CommonStrings.watchlistEmptyViewSubtitle, titleFilter: CommonStrings.watchlistEmptyViewFilterTitle, buttonTitle: CommonStrings.watchlistEmptyViewButtonTitle, attributedFilterString: attributedFilterString)
 
@@ -390,9 +385,5 @@ extension ViewControllerRouter: WMFOnboardingViewDelegate {
                 self?.appViewController.navigate(to: url)
             }
         }
-    }
-    
-    func onboardingViewWillSwipeToDismiss() {
-        
     }
 }

@@ -1,6 +1,7 @@
 import UIKit
+import WMFComponents
 
-class ArticleURLListViewController: ArticleCollectionViewController {
+class ArticleURLListViewController: ArticleCollectionViewController, WMFNavigationBarConfiguring {
     let articleURLs: [URL]
     private let articleKeys: Set<String>
     var contentGroupIDURIString: String?
@@ -8,11 +9,12 @@ class ArticleURLListViewController: ArticleCollectionViewController {
     required init(articleURLs: [URL], dataStore: MWKDataStore, contentGroup: WMFContentGroup? = nil, theme: Theme) {
         self.articleURLs = articleURLs
         self.articleKeys = Set<String>(articleURLs.compactMap { $0.wmf_databaseKey })
-        super.init()
+        super.init(nibName: nil, bundle: nil)
         self.contentGroup = contentGroup
         self.contentGroupIDURIString = contentGroup?.objectID.uriRepresentation().absoluteString
         self.theme = theme
         self.dataStore = dataStore
+        hidesBottomBarWhenPushed = true
     }
     
     deinit {
@@ -54,6 +56,18 @@ class ArticleURLListViewController: ArticleCollectionViewController {
         collectionView.reloadData()
         NotificationCenter.default.addObserver(self, selector: #selector(articleDidChange(_:)), name: NSNotification.Name.WMFArticleUpdated, object: nil)
     }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        configureNavigationBar()
+    }
+    
+    private func configureNavigationBar() {
+        let titleConfig = WMFNavigationBarTitleConfig(title: title ?? "", customView: nil, alignment: .hidden)
+        
+        configureNavigationBar(titleConfig: titleConfig, closeButtonConfig: nil, profileButtonConfig: nil, tabsButtonConfig: nil, searchBarConfig: nil, hideNavigationBarOnScroll: false)
+    }
 
     override var eventLoggingCategory: EventCategoryMEP {
         return .feed
@@ -70,17 +84,12 @@ class ArticleURLListViewController: ArticleCollectionViewController {
         navigationController?.popViewController(animated: true)
     }
 
-    override func readMoreArticlePreviewActionSelected(with articleController: ArticleViewController) {
-        articleController.wmf_removePeekableChildViewControllers()
-        push(articleController, animated: true)
+    override func readMoreArticlePreviewActionSelected(with peekController: ArticlePeekPreviewViewController) {
+        
+        guard let navVC = navigationController else { return }
+        let coordinator = ArticleCoordinator(navigationController: navVC, articleURL: peekController.articleURL, dataStore: dataStore, theme: theme, source: .undefined)
+        coordinator.start()
     }
-
-    // MARK: - CollectionViewContextMenuShowing
-    override func previewingViewController(for indexPath: IndexPath, at location: CGPoint) -> UIViewController? {
-        let vc = super.previewingViewController(for: indexPath, at: location)
-        return vc
-    }
-
 }
 
 // MARK: - UICollectionViewDataSource

@@ -5,7 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "WMFData",
-    platforms: [.iOS(.v15)],
+    platforms: [.iOS(.v16)],
     products: [
         // Products define the executables and libraries a package produces, and make them visible to other packages.
                 .library(
@@ -24,7 +24,8 @@ let package = Package(
         .target(
                    name: "WMFData",
                    dependencies: [],
-                   path: "Sources/WMFData"),
+                   path: "Sources/WMFData",
+                   resources: [.process("Resources")]),
                .target(name: "WMFDataMocks",
                       dependencies: ["WMFData"],
                        path: "Sources/WMFDataMocks",

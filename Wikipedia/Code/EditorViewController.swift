@@ -1,4 +1,5 @@
 import UIKit
+import SwiftUI
 import WMFComponents
 import WMF
 import CocoaLumberjackSwift
@@ -6,10 +7,10 @@ import WMFData
 
 protocol EditorViewControllerDelegate: AnyObject {
     func editorDidCancelEditing(_ editor: EditorViewController, navigateToURL url: URL?)
-    func editorDidFinishEditing(_ editor: EditorViewController, result: Result<EditorChanges, Error>)
+    func editorDidFinishEditing(_ editor: EditorViewController, result: Result<EditorChanges, Error>, needsNewTempAccountToast: Bool?)
 }
 
-final class EditorViewController: UIViewController {
+final class EditorViewController: UIViewController, WMFNavigationBarConfiguring {
     
     // MARK: - Nested Types
     
@@ -35,7 +36,7 @@ final class EditorViewController: UIViewController {
     // MARK: - Properties
     
     private let pageURL: URL
-    private let sectionID: Int?
+    let sectionID: Int?
     private let editFlow: EditFlow
     private let source: Source
     private let dataStore: MWKDataStore
@@ -53,13 +54,19 @@ final class EditorViewController: UIViewController {
     
     private var editConfirmationSavedData: EditSaveViewController.SaveData? = nil
     private var editCloseProblemSource: EditInteractionFunnel.ProblemSource?
-    
+
+    private var wikiHasTempAccounts: Bool?
+
     private lazy var focusNavigationView: FocusNavigationView = {
         return FocusNavigationView.wmf_viewFromClassNib()
     }()
     
+    private var shouldShowEditAlert: Bool {
+        return !UserDefaults.standard.didShowInformationEditingMessage && sectionID == 0
+    }
+
     private lazy var navigationItemController: EditorNavigationItemController = {
-        let navigationItemController = EditorNavigationItemController(navigationItem: navigationItem)
+        let navigationItemController = EditorNavigationItemController(navigationItem: navigationItem, dataStore: dataStore)
         navigationItemController.delegate = self
         return navigationItemController
     }()
@@ -74,6 +81,10 @@ final class EditorViewController: UIViewController {
         spinner.translatesAutoresizingMaskIntoConstraints = false
         return spinner
     }()
+    
+    internal var authManager: WMFAuthenticationManager {
+        return dataStore.authenticationManager
+    }
     
     // MARK: - Lifecycle
     
@@ -99,7 +110,7 @@ final class EditorViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-
+        
         setTextSizeInAppEnvironment()
         setupFocusNavigationView()
         setupNavigationItemController()
@@ -109,7 +120,22 @@ final class EditorViewController: UIViewController {
         loadContent()
     }
     
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        configureNavigationBar()
+    }
+    
     // MARK: - Private Helpers
+    
+    
+    private func configureNavigationBar() {
+
+        let titleConfig = WMFNavigationBarTitleConfig(title: CommonStrings.editorTitle, customView: nil, alignment: .hidden)
+        
+        let closeConfig = WMFNavigationBarCloseButtonConfig(text: CommonStrings.cancelActionTitle, target: self, action: #selector(close(_ :)), alignment: .leading)
+
+        configureNavigationBar(titleConfig: titleConfig, closeButtonConfig: closeConfig, profileButtonConfig: nil, tabsButtonConfig: nil, searchBarConfig: nil, hideNavigationBarOnScroll: false)
+    }
     
     private func setupFocusNavigationView() {
 
@@ -198,7 +224,15 @@ final class EditorViewController: UIViewController {
                 wikitextFetchError = error
             }
         }
-        
+
+        group.enter()
+        checkWikiStatus { langHasTempAccounts in
+            defer {
+                group.leave()
+            }
+            self.wikiHasTempAccounts = langHasTempAccounts
+        }
+
         group.notify(queue: .main) { [weak self] in
             
             guard let self else {
@@ -216,23 +250,27 @@ final class EditorViewController: UIViewController {
                 handleWikitextLoadFailure(error: RequestError.unexpectedResponse)
                 return
             }
-            
+            var isDifferentErrorBannerShown = false
             if let blockedError = wikitextFetchResponse.blockedError {
                 presentBlockedError(error: blockedError)
+                isDifferentErrorBannerShown = true
             } else if let protectedPageError = wikitextFetchResponse.protectedPageError {
                 presentProtectedPageWarning(error: protectedPageError)
+                isDifferentErrorBannerShown = true
             } else if let otherError = wikitextFetchResponse.otherError {
                 WMFAlertManager.sharedInstance.showErrorAlertWithMessage(otherError.messageHtml.removingHTML, sticky: false, dismissPreviousAlerts: true)
+                isDifferentErrorBannerShown = true
+            } else if let editNoticesViewModel,
+              !editNoticesViewModel.notices.isEmpty {
+               self.editNoticesViewModel = editNoticesViewModel
+               self.navigationItemController.addEditNoticesButton()
+               self.navigationItemController.apply(theme: self.theme)
+               self.presentEditNoticesIfNecessary(viewModel: editNoticesViewModel, blockedError: wikitextFetchResponse.blockedError, userGroupLevelCanEdit: wikitextFetchResponse.userGroupLevelCanEdit)
+               isDifferentErrorBannerShown = true
             }
             
-            if let editNoticesViewModel,
-               !editNoticesViewModel.notices.isEmpty {
-                self.editNoticesViewModel = editNoticesViewModel
-                self.navigationItemController.addEditNoticesButton()
-                self.navigationItemController.apply(theme: self.theme)
-                self.presentEditNoticesIfNecessary(viewModel: editNoticesViewModel, blockedError: wikitextFetchResponse.blockedError, userGroupLevelCanEdit: wikitextFetchResponse.userGroupLevelCanEdit)
-            }
-            
+            self.navigationItemController.addTempAccountsNoticesButtons(wikiHasTempAccounts: wikiHasTempAccounts)
+
             let needsReadOnly = (wikitextFetchResponse.blockedError != nil) || (wikitextFetchResponse.protectedPageError != nil && !wikitextFetchResponse.userGroupLevelCanEdit)
             
             if wikitextFetchResponse.blockedError != nil {
@@ -248,7 +286,10 @@ final class EditorViewController: UIViewController {
             } else {
                 self.addChildEditor(wikitext: wikitextFetchResponse.wikitext, needsReadOnly: needsReadOnly, onloadSelectRange: wikitextFetchResponse.onloadSelectRange)
             }
-            
+            if shouldShowEditAlert && !isDifferentErrorBannerShown {
+                WMFAlertManager.sharedInstance.showWarningAlert(CommonStrings.editArticleWarning, duration: NSNumber(value: 5), sticky: false, dismissPreviousAlerts: true)
+                UserDefaults.standard.didShowInformationEditingMessage = true
+            }
         }
     }
     
@@ -299,7 +340,20 @@ final class EditorViewController: UIViewController {
         present(alert, animated: true)
         editCloseProblemSource = .articleSelectFail
     }
-    
+
+    private func checkWikiStatus(completion: @escaping (Bool) -> Void) {
+        guard let language = pageURL.wmf_languageCode else {
+            completion(false)
+            return
+        }
+
+        let dataController = WMFTempAccountDataController.shared
+        Task {
+            let hasTempStatus = await dataController.asyncCheckWikiTempAccountAvailability(language: language, isCheckingPrimaryWiki: false)
+            completion(hasTempStatus)
+        }
+    }
+
     private func loadWikitext(completion: @escaping (Result<WikitextFetchResponse, Error>) -> Void) {
         wikitextFetcher.fetchSection(with: sectionID, articleURL: pageURL) {  [weak self] (result) in
             DispatchQueue.main.async { [weak self] in
@@ -549,7 +603,6 @@ final class EditorViewController: UIViewController {
         let textSizeAdjustment =  WMFFontSizeMultiplier(rawValue: UserDefaults.standard.wmf_articleFontSizeMultiplier().intValue) ?? .large
         WMFAppEnvironment.current.set(articleAndEditorTextSize: textSizeAdjustment.contentSizeCategory)
     }
-    
 
     private func showDestructiveDismissAlert(sender: UIBarButtonItem, confirmCompletion: @escaping () -> Void) {
         let alert = UIAlertController(title: nil, message: CommonStrings.editorExitConfirmationMessage, preferredStyle: .actionSheet)
@@ -625,8 +678,8 @@ final class EditorViewController: UIViewController {
             return
         }
 
-        saveVC.savedData = editConfirmationSavedData
         saveVC.dataStore = dataStore
+        saveVC.savedData = editConfirmationSavedData
         saveVC.pageURL = pageURL
         saveVC.sectionID = sectionID
         saveVC.languageCode = pageURL.wmf_languageCode
@@ -642,6 +695,32 @@ final class EditorViewController: UIViewController {
         saveVC.theme = self.theme
         
         navigationController?.pushViewController(saveVC, animated: true)
+    }
+    
+    @objc private func close(_ sender: UIBarButtonItem) {
+        let progressButton = navigationItemController.progressButton
+        if progressButton.isEnabled {
+            showDestructiveDismissAlert(sender: sender) { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.delegate?.editorDidCancelEditing(self, navigateToURL: nil)
+            }
+        } else {
+            
+            if let project = WikimediaProject(siteURL: pageURL) {
+                switch source {
+                case .article:
+                    EditInteractionFunnel.shared.logArticleEditorDidTapClose(problemSource: editCloseProblemSource, project: project)
+                case .talk:
+                    EditInteractionFunnel.shared.logTalkEditorDidTapClose(problemSource: editCloseProblemSource, project: project)
+                }
+            }
+            
+            EditAttemptFunnel.shared.logAbort(pageURL: pageURL)
+
+            delegate?.editorDidCancelEditing(self, navigateToURL: nil)
+        }
     }
 }
 
@@ -691,13 +770,12 @@ extension EditorViewController: WMFSourceEditorViewControllerDelegate {
                 return
             }
             
-            guard let editLinkViewController = EditLinkViewController(link: link, siteURL: pageURL.wmf_site, dataStore: dataStore) else {
+            guard let editLinkViewController = EditLinkViewController(link: link, siteURL: pageURL.wmf_site, dataStore: dataStore, theme: theme) else {
                 return
             }
             
             editLinkViewController.delegate = self
-            let navigationController = WMFThemeableNavigationController(rootViewController: editLinkViewController, theme: self.theme)
-            navigationController.isNavigationBarHidden = true
+            let navigationController = WMFComponentNavigationController(rootViewController: editLinkViewController, modalPresentationStyle: .overFullScreen)
             present(navigationController, animated: true)
         }
         
@@ -706,9 +784,9 @@ extension EditorViewController: WMFSourceEditorViewControllerDelegate {
                 return
             }
             
-            let insertLinkViewController = InsertLinkViewController(link: link, siteURL: siteURL, dataStore: dataStore)
+            let insertLinkViewController = InsertLinkViewController(link: link, siteURL: siteURL, dataStore: dataStore, theme: theme)
             insertLinkViewController.delegate = self
-            let navigationController = WMFThemeableNavigationController(rootViewController: insertLinkViewController, theme: self.theme)
+            let navigationController = WMFComponentNavigationController(rootViewController: insertLinkViewController, modalPresentationStyle: .overFullScreen)
             present(navigationController, animated: true)
         }
     }
@@ -724,8 +802,7 @@ extension EditorViewController: WMFSourceEditorViewControllerDelegate {
         let insertMediaViewController = InsertMediaViewController(articleTitle: pageURL.wmf_title, siteURL: siteURL)
         insertMediaViewController.delegate = self
         insertMediaViewController.apply(theme: theme)
-        let navigationController = WMFThemeableNavigationController(rootViewController: insertMediaViewController, theme: theme)
-        navigationController.isNavigationBarHidden = true
+        let navigationController = WMFComponentNavigationController(rootViewController: insertMediaViewController, modalPresentationStyle: .overFullScreen)
         present(navigationController, animated: true)
     }
 }
@@ -760,40 +837,34 @@ extension EditorViewController: EditorNavigationItemControllerDelegate {
         EditAttemptFunnel.shared.logSaveIntent(pageURL: pageURL)
     }
     
-    func editorNavigationItemController(_ editorNavigationItemController: EditorNavigationItemController, didTapCloseButton closeButton: UIBarButtonItem) {
-        
-        let progressButton = navigationItemController.progressButton
-        let closeButton = navigationItemController.closeButton
-        if progressButton.isEnabled {
-            showDestructiveDismissAlert(sender: closeButton) { [weak self] in
-                guard let self else {
-                    return
-                }
-                self.delegate?.editorDidCancelEditing(self, navigateToURL: nil)
-            }
-        } else {
-            
-            if let project = WikimediaProject(siteURL: pageURL) {
-                switch source {
-                case .article:
-                    EditInteractionFunnel.shared.logArticleEditorDidTapClose(problemSource: editCloseProblemSource, project: project)
-                case .talk:
-                    EditInteractionFunnel.shared.logTalkEditorDidTapClose(problemSource: editCloseProblemSource, project: project)
-                }
-            }
-            
-            EditAttemptFunnel.shared.logAbort(pageURL: pageURL)
-
-            delegate?.editorDidCancelEditing(self, navigateToURL: nil)
-        }
-    }
-    
     func editorNavigationItemController(_ editorNavigationItemController: EditorNavigationItemController, didTapUndoButton undoButton: UIBarButtonItem) {
         sourceEditor?.undo()
     }
     
     func editorNavigationItemController(_ editorNavigationItemController: EditorNavigationItemController, didTapRedoButton redoButton: UIBarButtonItem) {
         sourceEditor?.redo()
+    }
+    
+    func editorNavigationItemController(_ editorNavigationItemController: EditorNavigationItemController, didTapTemporaryAccountNoticesButton tempButton: UIBarButtonItem) {
+        guard let navigationController else { return }
+        let tempAccountSheetCoordinator = TempAccountSheetCoordinator(navigationController: navigationController, theme: theme, dataStore: dataStore, didTapDone: { [weak self] in
+            self?.dismiss(animated: true)
+        }, didTapContinue: { [weak self] in
+            self?.dismiss(animated: true)
+        }, isTempAccount: true)
+        
+        _ = tempAccountSheetCoordinator.start()
+    }
+    
+    func editorNavigationItemController(_ editorNavigationItemController: EditorNavigationItemController, didTapIPAccountNoticesButton ipButton: UIBarButtonItem) {
+        guard let navigationController else { return }
+        let tempAccountSheetCoordinator = TempAccountSheetCoordinator(navigationController: navigationController, theme: theme, dataStore: dataStore, didTapDone: { [weak self] in
+            self?.dismiss(animated: true)
+        }, didTapContinue: { [weak self] in
+            self?.dismiss(animated: true)
+        }, isTempAccount: false)
+        
+        _ = tempAccountSheetCoordinator.start()
     }
     
     func editorNavigationItemController(_ editorNavigationItemController: EditorNavigationItemController, didTapReadingThemesControlsButton readingThemesControlsButton: UIBarButtonItem) {
@@ -878,11 +949,11 @@ extension EditorViewController: ReadingThemesControlsPresenting {
 
 extension EditorViewController: EditLinkViewControllerDelegate {
     func editLinkViewController(_ editLinkViewController: EditLinkViewController, didTapCloseButton button: UIBarButtonItem) {
-        dismiss(animated: true)
+        editLinkViewController.dismiss(animated: true)
     }
     
     func editLinkViewController(_ editLinkViewController: EditLinkViewController, didFinishEditingLink displayText: String?, linkTarget: String) {
-        dismiss(animated: true)
+        editLinkViewController.dismiss(animated: true)
         sourceEditor?.editLink(newPageTitle: linkTarget, newPageLabel: displayText)
     }
     
@@ -892,7 +963,7 @@ extension EditorViewController: EditLinkViewControllerDelegate {
     }
     
     func editLinkViewControllerDidRemoveLink(_ editLinkViewController: EditLinkViewController) {
-        dismiss(animated: true)
+        editLinkViewController.dismiss(animated: true)
         sourceEditor?.removeLink()
     }
 }
@@ -901,25 +972,25 @@ extension EditorViewController: EditLinkViewControllerDelegate {
 
 extension EditorViewController: InsertLinkViewControllerDelegate {
     func insertLinkViewController(_ insertLinkViewController: InsertLinkViewController, didTapCloseButton button: UIBarButtonItem) {
-        dismiss(animated: true)
+        insertLinkViewController.dismiss(animated: true)
     }
     
     func insertLinkViewController(_ insertLinkViewController: InsertLinkViewController, didInsertLinkFor page: String, withLabel label: String?) {
         sourceEditor?.insertLink(pageTitle: page)
-        dismiss(animated: true)
+        insertLinkViewController.dismiss(animated: true)
     }
 }
 
 // MARK: - InsertMediaViewControllerDelegate
 
 extension EditorViewController: InsertMediaViewControllerDelegate {
-    func insertMediaViewController(_ insertMediaViewController: InsertMediaViewController, didTapCloseButton button: UIBarButtonItem) {
-        dismiss(animated: true)
+    func didTapCloseButton(insertMediaViewController: InsertMediaViewController) {
+        insertMediaViewController.dismiss(animated: true)
     }
     
-    func insertMediaViewController(_ insertMediaViewController: InsertMediaViewController, didPrepareWikitextToInsert wikitext: String) {
+    func didPrepareWikitextToInsert(wikitext: String, insertMediaViewController: InsertMediaViewController) {
         sourceEditor?.insertImage(wikitext: wikitext)
-        dismiss(animated: true)
+        insertMediaViewController.dismiss(animated: true)
     }
 }
 
@@ -950,10 +1021,10 @@ extension EditorViewController: EditPreviewViewControllerDelegate {
 
 extension EditorViewController: EditSaveViewControllerDelegate {
     
-    func editSaveViewControllerDidSave(_ editSaveViewController: EditSaveViewController, result: Result<EditorChanges, Error>) {
-        delegate?.editorDidFinishEditing(self, result: result)
+    func editSaveViewControllerDidSave(_ editSaveViewController: EditSaveViewController, result: Result<EditorChanges, Error>, needsNewTempAccountToast: Bool?) {
+        delegate?.editorDidFinishEditing(self, result: result, needsNewTempAccountToast: needsNewTempAccountToast)
     }
-
+    
     func editSaveViewControllerWillCancel(_ saveData: EditSaveViewController.SaveData) {
         editConfirmationSavedData = saveData
     }
@@ -1024,11 +1095,14 @@ extension EditorViewController: EditSaveViewControllerEditorLoggingDelegate {
 extension EditorViewController: EditNoticesViewControllerDelegate {
     func editNoticesControllerUserTapped(url: URL) {
         
+        guard let closeBarButtonItem = navigationItem.leftBarButtonItem else {
+            return
+        }
+        
         let progressButton = navigationItemController.progressButton
-        let closeButton = navigationItemController.closeButton
         if progressButton.isEnabled {
             editCloseProblemSource = .editNoticeLink
-            showDestructiveDismissAlert(sender: closeButton) { [weak self] in
+            showDestructiveDismissAlert(sender: closeBarButtonItem) { [weak self] in
                 guard let self else {
                     return
                 }

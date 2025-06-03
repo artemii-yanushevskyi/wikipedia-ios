@@ -16,8 +16,9 @@ public struct HtmlUtils {
         let strongColor: UIColor?
         let lineSpacing: CGFloat
         let listIndent: String
-        
-        public init(font: UIFont, boldFont: UIFont, italicsFont: UIFont, boldItalicsFont: UIFont, color: UIColor, linkColor: UIColor?, strongColor: UIColor? = nil, lineSpacing: CGFloat, listIndent: String = HtmlUtils.defaultListIndent) {
+        let lineBreakMode: NSLineBreakMode
+
+        public init(font: UIFont, boldFont: UIFont, italicsFont: UIFont, boldItalicsFont: UIFont, color: UIColor, linkColor: UIColor?, strongColor: UIColor? = nil, lineSpacing: CGFloat, listIndent: String = HtmlUtils.defaultListIndent, lineBreakMode: NSLineBreakMode = .byWordWrapping) {
             self.font = font
             self.boldFont = boldFont
             self.italicsFont = italicsFont
@@ -27,6 +28,7 @@ public struct HtmlUtils {
             self.strongColor = strongColor
             self.lineSpacing = lineSpacing
             self.listIndent = listIndent
+            self.lineBreakMode = lineBreakMode
         }
     }
     
@@ -81,6 +83,7 @@ public struct HtmlUtils {
         let attributedString = NSMutableAttributedString(string: html)
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = styles.lineSpacing
+        paragraphStyle.lineBreakMode = styles.lineBreakMode
         let attributes: [NSAttributedString.Key : Any] = [
             .font: styles.font,
             .foregroundColor: styles.color,
@@ -407,7 +410,7 @@ public struct HtmlUtils {
         let cleanString = regex.stringByReplacingMatches(in: string, options: [], range: string.fullNSRange, withTemplate: "")
         let entityReplaceData = try entityReplaceData(html: cleanString)
             let mutableCleanString = NSMutableString(string: cleanString)
-            for data in entityReplaceData {
+            for data in entityReplaceData.reversed() {
                 mutableCleanString.replaceCharacters(in: data.range, with: data.replaceText)
             }
             return mutableCleanString as String
@@ -471,12 +474,17 @@ public struct HtmlUtils {
             }
             
             if tagNameString == "/ol" {
-                types.removeLast()
-                indent = indent - 1
-                orderedListCounts.removeLast()
+                
+                if !types.isEmpty && !orderedListCounts.isEmpty { // Prevent crashes from malformed html
+                    types.removeLast()
+                    indent = indent - 1
+                    orderedListCounts.removeLast()
+                }
             } else if tagNameString == "/ul" {
-                types.removeLast()
-                indent = indent - 1
+                if !types.isEmpty { // Prevent crashes from malformed html
+                    types.removeLast()
+                    indent = indent - 1
+                }
             }
             
             if tagNameString == "li" {

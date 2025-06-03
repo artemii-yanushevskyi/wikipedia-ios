@@ -12,14 +12,6 @@
 // Author: Npavcec
 // Author: Ponor
 
-"aaald-added-text-description-2" = "$1 dodano";
-"aaald-article-description-updated-description" = "Opis članka je objavljen";
-"aaald-article-insert-header" = "Značajna ažuriranja";
-"aaald-article-insert-last-updated" = "Posljednji puta ažurirano";
-"aaald-article-insert-new-changes" = "Nove izmjene";
-"aaald-article-insert-read-more" = "Pročitajte još ažuriranja";
-"aaald-error-subitle" = "Osvježite za ponovni pokušaj";
-"aaald-error-title" = "Nije moguće učitati povijest uređivanja članka";
 "about-content-license" = "Licencija sadržaja";
 "about-contributors" = "Doprinositelji";
 "about-libraries" = "Korištene biblioteke";
@@ -94,7 +86,6 @@
 "button-next" = "Sljedeće";
 "button-ok" = "U redu";
 "button-publish" = "Objavi";
-"button-read-now" = "Čitaj sada";
 "button-report-a-bug" = "Prijavi grešku";
 "button-save-for-later" = "Spremi za kasnije";
 "button-saved-for-later" = "Spremljeno za kasnije";
@@ -240,13 +231,11 @@
 "insert-media-image-type-setting-basic" = "Osnovno";
 "languages-settings-title" = "Jezici";
 "languages-title" = "Odaberite jezik";
-"main-menu-account-logout-cancel" = "Odustani";
 "main-menu-nearby" = "U blizini";
 "main-menu-privacy-policy" = "Pravila privatnosti";
 "main-menu-rate-app" = "Ocijenite aplikaciju";
 "main-menu-terms-of-use" = "Uvjeti upotrebe";
 "main-menu-title" = "Više";
-"menu-cancel-accessibility-label" = "Odustani";
 "more-languages-tooltip-title" = "Dodajte jezike";
 // Fuzzy
 "notifications-center-feed-news-notification-button-text" = "Uključi obavijesti";

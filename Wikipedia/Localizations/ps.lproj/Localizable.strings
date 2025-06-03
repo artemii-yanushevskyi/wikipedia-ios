@@ -6,13 +6,15 @@
 // Author: Baloch Khan
 // Author: Macofe
 // Author: Nemo bis
+// Author: شاه زمان پټان
 
 "about-content-license" = "د مېنځپانگې منښتليک";
 "about-contributors" = "ونډه وال";
 "about-libraries" = "کارېدلي کتابتونونه";
 "about-libraries-complete-list" = "بشپړ لړليک";
 "about-libraries-license" = "منښتليک";
-"about-libraries-licenses-title" = "موږ د پرانيستې سرچينې په ساوترې ميين يو $1";
+"about-libraries-licenses-title" = "موږ د پرانېستې سرچينې په پوستغالي مين يو $1";
+"about-places-maps-license" = "د ځايونو د نخچو منښت";
 "about-repositories" = "زېرمې";
 "about-repositories-app-source-license-mit" = "MIT منښتليک";
 "about-testers" = "ازمېښتگران";
@@ -25,6 +27,10 @@
 "account-creation-saving" = "خوندي کېږي...";
 // Fuzzy
 "action-find-in-page" = "په مخ کې موندل";
+"activity-tab-add-images-subtitle" = "د پوهاوي لوړولو لپاره د ويکيپېډيا ليکنو ته وړانديز شوي انځورونه ورگډ کړئ.";
+"activity-tab-add-images-title" = "انځورونه ورگډول";
+"activity-tab-unsatisfied" = "ناخوښ";
+"activity-tab-view-saved-articles" = "خوندي شوې ليکنې کتل";
 "article-languages-filter-placeholder" = "ژبه موندل";
 "article-languages-label" = "ژبه ټاکل";
 "article-languages-others" = "نورې ژبې";
@@ -52,8 +58,9 @@
 "explore-nearby-sub-heading-your-location" = "ستاسې ځای";
 "explore-potd-heading" = "د نن ورځې انځور";
 "explore-random-article-heading" = "ناټاکلې ليکنه";
+"field-backup-token-title-email" = "برېښليک کوډ";
 "field-password-title" = "پټنوم";
-"field-username-title" = "کارن-نوم";
+"field-username-title" = "کارن‌نوم";
 "history-clear-all" = "سپينول";
 "history-clear-cancel" = "ناگارل";
 "history-clear-confirmation-heading" = "آيا ډاډمن يې چې خپل ټول وروستني توکي ړنگول غواړې؟";
@@ -69,19 +76,18 @@
 "main-menu-about" = "د کاريال په اړه";
 "main-menu-account-login" = "ننوتل";
 "main-menu-account-logout" = "وتل";
-"main-menu-account-logout-cancel" = "ناگارل";
 "main-menu-account-title-logged-in" = "د $1 په توگه ورننوتئ";
 "main-menu-nearby" = "نژدې";
 "main-menu-privacy-policy" = "د پټنتيا تگلاره";
 "main-menu-rate-app" = "کاريال ارزول";
 "main-menu-terms-of-use" = "د کارولو شرطونه";
 "main-menu-title" = "نور";
-"menu-cancel-accessibility-label" = "ناگارل";
 "navbar-title-mode-edit-wikitext-preview" = "مخليدنه";
 "nearby-distance-label-feet" = "$1 گام";
 "nearby-distance-label-km" = "$1 کیلومتر";
 "nearby-distance-label-meters" = "$1 متر";
 "nearby-distance-label-miles" = "$1 مايل";
+"page-history-bot-edits" = "روباټ";
 "page-protected-can-not-edit-title" = "دا مخ ژغورل شوی";
 "places-filter-top-articles-count" = "{{PLURAL:$1|$1 ليکنې|$1 ليکنې}}";
 "potd-description-prefix" = "د $1 د ورځې انځور";

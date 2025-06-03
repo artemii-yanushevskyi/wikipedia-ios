@@ -46,7 +46,7 @@ final class PageContentService {
         struct ReadMore: Codable {
             static let fragment = "pcs-footer-container-readmore"
             let itemCount: Int
-            let baseURL: String
+            let apiBaseURL: String
         }
         
         struct Parameters: Codable {
@@ -61,7 +61,7 @@ final class PageContentService {
     
     /// - Parameter encodable: the object to encode
     /// - Returns: a JavaScript string that will call JSON.parse on the JSON representation of the encodable
-    class func getJavascriptFor<T>(_ encodable: T) throws -> String where T: Encodable {
+    static func getJavascriptFor<T>(_ encodable: T) throws -> String where T: Encodable {
         let data = try PageContentService.paramsEncoder.encode(encodable)
         guard let string = String(data: data, encoding: .utf8) else {
             throw RequestError.invalidParameters
@@ -129,51 +129,6 @@ final class PageContentService {
         
         init() {
             super.init(source: StyleScript.source, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
-        }
-    }
-
-    final class SignificantEventsStyleScript: PageUserScript {
-        
-        static func sourceForTheme(_ theme: String) -> String {
-            
-            let cssFileName: String
-            switch theme {
-            case "sepia": cssFileName = "significant-events-styles-sepia"
-            case "dark": cssFileName = "significant-events-styles-dark"
-            case "black": cssFileName = "significant-events-styles-black"
-            default: cssFileName = "significant-events-styles-light"
-            }
-            
-            guard
-                let originalFileURL = Bundle.wmf.url(forResource: "styleoverrides", withExtension: "css", subdirectory: "assets"),
-                let originalData = try? Data(contentsOf: originalFileURL),
-                let originalCssString = String(data: originalData, encoding: .utf8)?.sanitizedForJavaScriptTemplateLiterals,
-                let baseFileURL = Bundle.wmf.url(forResource: "significant-events-styles-base", withExtension: "css", subdirectory: "assets"),
-                let baseData = try? Data(contentsOf: baseFileURL),
-                let baseCssString = String(data: baseData, encoding: .utf8)?.sanitizedForJavaScriptTemplateLiterals,
-                let fileURL = Bundle.wmf.url(forResource: cssFileName, withExtension: "css", subdirectory: "assets"),
-                let data = try? Data(contentsOf: fileURL),
-                let cssString = String(data: data, encoding: .utf8)?.sanitizedForJavaScriptTemplateLiterals
-            else {
-                return ""
-            }
-            return """
-                    var existing = document.getElementById('significant-events-styles');
-                    if (existing) {
-                        existing.remove();
-                    }
-                    var style = document.createElement('style');
-                    style.id = 'significant-events-styles';
-                    style.innerHTML = `\(originalCssString + baseCssString + cssString)`;
-                    document.head.appendChild(style);
-                """
-        }
-        
-        init(theme: String) {
-            
-            let calculatedSource = SignificantEventsStyleScript.sourceForTheme(theme)
-            
-            super.init(source: calculatedSource, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
         }
     }
 }

@@ -1,6 +1,7 @@
 import UIKit
+import WMFComponents
 
-class WMFAccountCreationViewController: WMFScrollViewController, WMFCaptchaViewControllerDelegate, UITextFieldDelegate, UIScrollViewDelegate, Themeable {
+class WMFAccountCreationViewController: WMFScrollViewController, WMFCaptchaViewControllerDelegate, UITextFieldDelegate, UIScrollViewDelegate, Themeable, WMFNavigationBarConfiguring {
     @IBOutlet fileprivate var usernameField: ThemeableTextField!
     @IBOutlet fileprivate var passwordRepeatField: ThemeableTextField!
     @IBOutlet fileprivate var emailField: ThemeableTextField!
@@ -18,8 +19,12 @@ class WMFAccountCreationViewController: WMFScrollViewController, WMFCaptchaViewC
     @IBOutlet fileprivate var titleLabel: UILabel!
     @IBOutlet fileprivate var stackView: UIStackView!
     @IBOutlet fileprivate var createAccountButton: WMFAuthButton!
-
+    @IBOutlet weak var scrollContainerTopConstraint: NSLayoutConstraint!
+    
     @IBOutlet fileprivate weak var scrollContainer: UIView!
+    
+    public var createAccountSuccessCustomDismissBlock: (() -> Void)?
+    private var toastView: UIView?
     
     // SINGLETONTODO
     let dataStore = MWKDataStore.shared()
@@ -33,6 +38,8 @@ class WMFAccountCreationViewController: WMFScrollViewController, WMFCaptchaViewC
     private var startDate: Date? // to calculate time elapsed between account creation start and account creation success
     
     fileprivate lazy var captchaViewController: WMFCaptchaViewController? = WMFCaptchaViewController.wmf_initialViewControllerFromClassStoryboard()
+    
+    private var checkingUsernameAvailability: Bool = false
     
     @objc func closeButtonPushed(_ : UIBarButtonItem?) {
         dismiss(animated: true, completion: nil)
@@ -53,7 +60,7 @@ class WMFAccountCreationViewController: WMFScrollViewController, WMFCaptchaViewC
         }
         dismiss(animated: true, completion: {
             loginVC.apply(theme: self.theme)
-            presenter.present(WMFThemeableNavigationController(rootViewController: loginVC, theme: self.theme), animated: true, completion: nil)
+            presenter.present(WMFComponentNavigationController(rootViewController: loginVC, modalPresentationStyle: .overFullScreen), animated: true, completion: nil)
         })
     }
     
@@ -69,9 +76,6 @@ class WMFAccountCreationViewController: WMFScrollViewController, WMFCaptchaViewC
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        navigationItem.leftBarButtonItem = UIBarButtonItem(image: UIImage(named:"close"), style: .plain, target:self, action:#selector(closeButtonPushed(_:)))
-        navigationItem.leftBarButtonItem?.accessibilityLabel = CommonStrings.closeButtonAccessibilityLabel
 
         createAccountButton.setTitle(WMFLocalizedString("account-creation-create-account", value:"Create your account", comment:"Text for create account button"), for: .normal)
         
@@ -98,7 +102,44 @@ class WMFAccountCreationViewController: WMFScrollViewController, WMFCaptchaViewC
         wmf_add(childController:captchaViewController, andConstrainToEdgesOfContainerView: captchaContainer)
         
         apply(theme: theme)
+        
+        let authManager = dataStore.authenticationManager
+        
+        if authManager.authStateIsTemporary {
+            let viewModel = WMFTempAccountsToastViewModel(
+                    didTapReadMore: {
+                        guard let navigationController = self.navigationController else { return }
+                        let tempAccountSheetCoordinator = TempAccountSheetCoordinator(navigationController: navigationController, theme: self.theme, dataStore: self.dataStore, didTapDone: { [weak self] in
+                            self?.dismiss(animated: true)
+                        }, didTapContinue: { [weak self] in
+                            self?.dismiss(animated: true)
+                        }, isTempAccount: true)
+                        _ = tempAccountSheetCoordinator.start()
+                    },
+                    title: CommonStrings.tempAccountsToastTitle(),
+                    readMoreButtonTitle: CommonStrings.tempAccountsReadMoreTitle
+                )
+
+            let toastController = WMFTempAccountsToastHostingController(viewModel: viewModel)
+            self.toastView = toastController.view
+
+            addChild(toastController)
+            view.addSubview(toastController.view)
+            toastController.didMove(toParent: self)
+            toastController.view.translatesAutoresizingMaskIntoConstraints = false
+
+            NSLayoutConstraint.activate([
+               toastController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 0),
+               toastController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: 0),
+               toastController.view.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor)
+            ])
+        }
     }
+    
+    override func viewDidLayoutSubviews() {
+         super.viewDidLayoutSubviews()
+        scrollContainerTopConstraint.constant = toastView?.frame.height ?? 0
+     }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
@@ -108,6 +149,13 @@ class WMFAccountCreationViewController: WMFScrollViewController, WMFCaptchaViewC
         
         updateEmailFieldReturnKeyType()
         enableProgressiveButtonIfNecessary()
+        configureNavigationBar()
+    }
+    
+    private func configureNavigationBar() {
+        let titleConfig = WMFNavigationBarTitleConfig(title: "", customView: nil, alignment: .hidden)
+        let closeConfig = WMFNavigationBarCloseButtonConfig(text: CommonStrings.cancelActionTitle, target: self, action: #selector(closeButtonPushed(_:)), alignment: .leading)
+        configureNavigationBar(titleConfig: titleConfig, closeButtonConfig: closeConfig, profileButtonConfig: nil, tabsButtonConfig: nil, searchBarConfig: nil, hideNavigationBarOnScroll: false)
     }
     
     fileprivate func getCaptcha() {
@@ -215,7 +263,7 @@ class WMFAccountCreationViewController: WMFScrollViewController, WMFCaptchaViewC
         WMFAlertManager.sharedInstance.showAlert(WMFLocalizedString("account-creation-logging-in", value:"Logging in...", comment:"Alert shown after account successfully created and the user is being logged in automatically. {{Identical|Logging in}}"), sticky: true, canBeDismissedByUser: false, dismissPreviousAlerts: true, tapCallBack: nil)
         let username = usernameField.text ?? ""
         let password = passwordField.text ?? ""
-        dataStore.authenticationManager.login(username: username, password: password, retypePassword: nil, oathToken: nil, captchaID: nil, captchaWord: nil) { (loginResult) in
+        dataStore.authenticationManager.login(username: username, password: password, retypePassword: nil, oathToken: nil, emailAuthCode: nil, captchaID: nil, captchaWord: nil) { (loginResult) in
             switch loginResult {
             case .success:
                 let loggedInMessage = String.localizedStringWithFormat(WMFLocalizedString("main-menu-account-title-logged-in", value:"Logged in as %1$@", comment:"Header text used when account is logged in. %1$@ will be replaced with current username."), self.usernameField.text ?? "")
@@ -225,17 +273,20 @@ class WMFAccountCreationViewController: WMFScrollViewController, WMFCaptchaViewC
                 } else {
                     assertionFailure("startDate is nil; startDate is required to calculate timeElapsed")
                 }
-                let presenter = self.presentingViewController
-                self.dismiss(animated: true, completion: {
-                    presenter?.wmf_showEnableReadingListSyncPanel(theme: self.theme, oncePerLogin: true)
-                })
+                
+                if let customDismissBlock = self.createAccountSuccessCustomDismissBlock {
+                    customDismissBlock()
+                } else {
+                    let presenter = self.presentingViewController
+                    self.dismiss(animated: true, completion: {
+                        presenter?.wmf_showEnableReadingListSyncPanel(theme: self.theme, oncePerLogin: true)
+                    })
+                }
+                
             case .failure(let error):
                 self.setViewControllerUserInteraction(enabled: true)
                 self.enableProgressiveButtonIfNecessary()
                 WMFAlertManager.sharedInstance.showErrorAlert(error as NSError, sticky: true, dismissPreviousAlerts: true, tapCallBack: nil)
-            default:
-                assertionFailure("Unhandled login result")
-                break
             }
         }
     }
@@ -255,7 +306,8 @@ class WMFAccountCreationViewController: WMFScrollViewController, WMFCaptchaViewC
     
     fileprivate func save() {
         
-        usernameAlertLabel.isHidden = true
+        usernameAlertLabel.alpha = 0
+        usernameField.textColor = theme.colors.primaryText
         passwordRepeatAlertLabel.isHidden = true
         
         guard areRequiredFieldsPopulated() else {
@@ -278,7 +330,7 @@ class WMFAccountCreationViewController: WMFScrollViewController, WMFCaptchaViewC
     @IBAction func textFieldDidBeginEditing(_ textField: UITextField) {
         switch textField {
         case usernameField:
-            usernameAlertLabel.isHidden = true
+            usernameAlertLabel.alpha = 0
             usernameField.textColor = theme.colors.primaryText
             usernameField.keyboardAppearance = theme.keyboardAppearance
         case passwordRepeatField:
@@ -287,6 +339,34 @@ class WMFAccountCreationViewController: WMFScrollViewController, WMFCaptchaViewC
             passwordRepeatField.keyboardAppearance = theme.keyboardAppearance
         default: break
         }
+    }
+    
+    @IBAction func textFieldDidEndEditing(_ textField: UITextField, reason: UITextField.DidEndEditingReason) {
+        guard textField === usernameField, reason == .committed, let username = textField.text else { return }
+        let siteURL = dataStore.primarySiteURL!
+        
+        guard !checkingUsernameAvailability else {
+            // Already checking username availability. Returning early to prevent duplicate calls.
+            return
+        }
+        
+        checkingUsernameAvailability = true
+        
+        accountCreator.checkUsername(username, siteURL: siteURL, success: { [weak self] canCreate in
+            DispatchQueue.main.async {
+                guard let self else {
+                    return
+                }
+                self.checkingUsernameAvailability = false
+                if !canCreate {
+                    self.usernameAlertLabel.text = WMFAccountCreatorError.usernameUnavailable.localizedDescription
+                    self.usernameAlertLabel.alpha = 1
+                    self.usernameField.textColor = self.theme.colors.error
+                }
+            }
+        }, failure: { [weak self] error in
+            self?.checkingUsernameAvailability = false
+        })
     }
 
     fileprivate func createAccount() {
@@ -305,7 +385,7 @@ class WMFAccountCreationViewController: WMFScrollViewController, WMFCaptchaViewC
                     switch error {
                     case .usernameUnavailable:
                         self.usernameAlertLabel.text = error.localizedDescription
-                        self.usernameAlertLabel.isHidden = false
+                        self.usernameAlertLabel.alpha = 1
                         self.usernameField.textColor = self.theme.colors.error
                         self.usernameField.keyboardAppearance = self.theme.keyboardAppearance
                         WMFAlertManager.sharedInstance.dismissAlert()

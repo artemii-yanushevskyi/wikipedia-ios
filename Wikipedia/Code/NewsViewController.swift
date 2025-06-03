@@ -1,7 +1,8 @@
 import WMF
+import WMFComponents
 
 @objc(WMFNewsViewController)
-class NewsViewController: ColumnarCollectionViewController {
+class NewsViewController: ColumnarCollectionViewController, WMFNavigationBarConfiguring {
     fileprivate static let cellReuseIdentifier = "NewsCollectionViewCell"
     fileprivate static let headerReuseIdentifier = "NewsCollectionViewHeader"
     
@@ -20,9 +21,9 @@ class NewsViewController: ColumnarCollectionViewController {
         self.dataStore = dataStore
         self.contentGroup = contentGroup
         contentGroupIDURIString = contentGroup?.objectID.uriRepresentation().absoluteString
-        super.init()
+        super.init(nibName: nil, bundle: nil)
         self.theme = theme
-        title = CommonStrings.inTheNewsTitle
+        hidesBottomBarWhenPushed = true
     }
     
     required init?(coder aDecoder: NSCoder) {
@@ -34,6 +35,16 @@ class NewsViewController: ColumnarCollectionViewController {
         layoutManager.register(NewsCollectionViewCell.self, forCellWithReuseIdentifier: NewsViewController.cellReuseIdentifier, addPlaceholder: true)
         layoutManager.register(UINib(nibName: NewsViewController.headerReuseIdentifier, bundle: nil), forSupplementaryViewOfKind: UICollectionView.elementKindSectionHeader, withReuseIdentifier: NewsViewController.headerReuseIdentifier, addPlaceholder: false)
         collectionView.allowsSelection = false
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        configureNavigationBar()
+    }
+    
+    private func configureNavigationBar() {
+        let titleConfig = WMFNavigationBarTitleConfig(title: CommonStrings.inTheNewsTitle, customView: nil, alignment: .hidden)
+        configureNavigationBar(titleConfig: titleConfig, closeButtonConfig: nil, profileButtonConfig: nil, tabsButtonConfig: nil, searchBarConfig: nil, hideNavigationBarOnScroll: false)
     }
     
     override func metrics(with size: CGSize, readableWidth: CGFloat, layoutMargins: UIEdgeInsets) -> ColumnarCollectionViewLayoutMetrics {
@@ -73,9 +84,12 @@ class NewsViewController: ColumnarCollectionViewController {
         collectionView.backgroundColor = theme.colors.paperBackground
     }
 
-    override func readMoreArticlePreviewActionSelected(with articleController: ArticleViewController) {
-        articleController.wmf_removePeekableChildViewControllers()
-        push(articleController, animated: true)
+    override func readMoreArticlePreviewActionSelected(with peekController: ArticlePeekPreviewViewController) {
+        
+        guard let navVC = navigationController else { return }
+        
+        let coordinator = ArticleCoordinator(navigationController: navVC, articleURL: peekController.articleURL, dataStore: dataStore, theme: theme, source: .undefined)
+        coordinator.start()
         previewedIndex = nil
     }
 
@@ -150,6 +164,7 @@ extension NewsViewController {
         let headerDateFormatter = DateFormatter()
         headerDateFormatter.locale = Locale.autoupdatingCurrent
         headerDateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        
         headerDateFormatter.setLocalizedDateFormatFromTemplate("EEEEMMMMd") // Year is invalid on news content dates, we can only show month and day
         return headerDateFormatter
     }()
@@ -161,18 +176,46 @@ extension NewsViewController {
         return stories[section - 1]
     }
     
+    func combineStoryDateWithCurrentYear(storyDate: Date) -> Date? {
+        let calendar = Calendar.current
+        
+        let dayAndMonth = Calendar.current.dateComponents([.day, .month], from: storyDate)
+        let currentYear = Calendar.current.dateComponents([.year], from: Date())
+        
+        var formattedYearComponent = DateComponents()
+        formattedYearComponent.year = currentYear.year! - 1
+        
+        var formattedDayAndMonthComponent = DateComponents()
+        formattedDayAndMonthComponent.day = dayAndMonth.day! + 1
+        formattedDayAndMonthComponent.month = dayAndMonth.month
+        
+        guard let date1 = calendar.date(from: formattedDayAndMonthComponent),
+              let mergedDate = calendar.date(byAdding: formattedYearComponent, to: date1) else { return nil }
+        
+        return mergedDate
+    }
+    
     func headerTitle(for section: Int) -> String? {
         guard let story = story(for: section), let date = story.midnightUTCMonthAndDay else {
             return nil
         }
-        return NewsViewController.headerDateFormatter.string(from: date)
+        
+        guard let formattedDate = combineStoryDateWithCurrentYear(storyDate: date) else { return nil }
+        
+        return NewsViewController.headerDateFormatter.string(from: formattedDate)
     }
 }
 
 // MARK: - SideScrollingCollectionViewCellDelegate
 extension NewsViewController: SideScrollingCollectionViewCellDelegate {
     func sideScrollingCollectionViewCell(_ sideScrollingCollectionViewCell: SideScrollingCollectionViewCell, didSelectArticleWithURL articleURL: URL, at indexPath: IndexPath) {
-        navigate(to: articleURL)
+        
+        guard let navigationController else {
+            return
+        }
+        
+        let articleCoordinator = ArticleCoordinator(navigationController: navigationController, articleURL: articleURL, dataStore: dataStore, theme: theme, source: .undefined)
+        articleCoordinator.start()
     }
 }
 
@@ -189,16 +232,15 @@ extension NewsViewController: MEPEventsProviding {
 
 // MARK: - NestedCollectionViewContextMenuDelegate
 extension NewsViewController: NestedCollectionViewContextMenuDelegate {
-    func contextMenu(with contentGroup: WMFContentGroup? = nil, for articleURL: URL? = nil, at itemIndex: Int) -> UIContextMenuConfiguration? {
-        guard let articleURL = articleURL, let vc = ArticleViewController(articleURL: articleURL, dataStore: dataStore, theme: theme) else {
+    func contextMenu(contentGroup: WMFContentGroup? = nil, articleURL: URL? = nil, article: WMFArticle? = nil, itemIndex: Int) -> UIContextMenuConfiguration? {
+        guard let articleURL = articleURL else {
             return nil
         }
-        vc.articlePreviewingDelegate = self
-        vc.wmf_addPeekableChildViewController(for: articleURL, dataStore: dataStore, theme: theme)
+        let peekVC = ArticlePeekPreviewViewController(articleURL: articleURL, article: nil, dataStore: dataStore, theme: theme, articlePreviewingDelegate: self)
         previewedIndex = itemIndex
 
         let previewProvider: () -> UIViewController? = {
-            return vc
+            return peekVC
         }
         return UIContextMenuConfiguration(identifier: nil, previewProvider: previewProvider) { (suggestedActions) -> UIMenu? in
             return nil
@@ -207,22 +249,22 @@ extension NewsViewController: NestedCollectionViewContextMenuDelegate {
             // results in an assertion failure in dev mode due to constraints that are automatically added by the preview's action menu, which
             // further results in the horizontally scrollable collection view being broken when coming back to it. I'm not sure that this
             // functionality was present before this re-write, and so leaving it out for now.
-//              return UIMenu(title: "", image: nil, identifier: nil, options: [], children: vc.contextMenuItems)
+//              return UIMenu(title: "", image: nil, identifier: nil, options: [], children: peekVC.contextMenuItems)
         }
     }
 
     func willCommitPreview(with animator: UIContextMenuInteractionCommitAnimating) {
-        guard let previewedViewController = animator.previewViewController else {
+        guard let peekVC = animator.previewViewController as? ArticlePeekPreviewViewController,
+            let navVC = navigationController else {
             assertionFailure("Should be able to find previewed VC")
             return
         }
         animator.addCompletion { [weak self] in
-            previewedViewController.wmf_removePeekableChildViewControllers()
-
-            guard let self = self else {
-                return
-            }
-            self.push(previewedViewController, animated: true)
+            
+            guard let self else { return }
+            
+            let coordinator = ArticleCoordinator(navigationController: navVC, articleURL: peekVC.articleURL, dataStore: MWKDataStore.shared(), theme: self.theme, source: .undefined)
+            coordinator.start()
             self.previewedIndex = nil
         }
     }

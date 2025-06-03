@@ -5,11 +5,10 @@ import WMFData
 
 struct EditorChanges {
     let newRevisionID: UInt64
-    let postedWikitext: String?
 }
 
 protocol EditSaveViewControllerDelegate: NSObjectProtocol {
-    func editSaveViewControllerDidSave(_ editSaveViewController: EditSaveViewController, result: Result<EditorChanges, Error>)
+    func editSaveViewControllerDidSave(_ editSaveViewController: EditSaveViewController, result: Result<EditorChanges, Error>, needsNewTempAccountToast: Bool?)
     func editSaveViewControllerWillCancel(_ saveData: EditSaveViewController.SaveData)
     func editSaveViewControllerDidTapShowWebPreview()
 }
@@ -41,8 +40,14 @@ private enum NavigationMode : Int {
     case captcha
 }
 
-class EditSaveViewController: WMFScrollViewController, Themeable, UITextFieldDelegate, UIScrollViewDelegate, WMFCaptchaViewControllerDelegate, EditSummaryViewDelegate {
+public enum AuthState: Int {
+    case loggedIn
+    case tempAccount
+    case ipAccount
+}
 
+class EditSaveViewController: WMFScrollViewController, Themeable, UITextFieldDelegate, UIScrollViewDelegate, WMFCaptchaViewControllerDelegate, EditSummaryViewDelegate, WMFNavigationBarConfiguring {
+    
     struct SaveData {
         let summmaryText: String
         let isMinorEdit: Bool
@@ -56,6 +61,7 @@ class EditSaveViewController: WMFScrollViewController, Themeable, UITextFieldDel
     var languageCode: String?
     var dataStore: MWKDataStore?
     var source: EditorViewController.Source?
+    var authState: AuthState? = nil
     
     var wikitext = ""
     var theme: Theme = .standard
@@ -68,6 +74,7 @@ class EditSaveViewController: WMFScrollViewController, Themeable, UITextFieldDel
     weak var imageRecLoggingDelegate: EditSaveViewControllerImageRecLoggingDelegate?
 
     private lazy var captchaViewController: WMFCaptchaViewController? = WMFCaptchaViewController.wmf_initialViewControllerFromClassStoryboard()
+    private var editSummaryViewController: EditSummaryViewController?
     @IBOutlet private var captchaContainer: UIView!
     @IBOutlet private var editSummaryVCContainer: UIView!
     @IBOutlet private var licenseTitleTextView: UITextView!
@@ -92,10 +99,10 @@ class EditSaveViewController: WMFScrollViewController, Themeable, UITextFieldDel
     private var buttonSave: UIBarButtonItem?
     private var buttonNext: UIBarButtonItem?
     private var buttonX: UIBarButtonItem?
-    private var buttonLeftCaret: UIBarButtonItem?
     private var abuseFilterCode = ""
     private var summaryText = ""
-    
+    private var wikiHasTempAccounts: Bool?
+
     @IBOutlet weak var showWebPreviewContainerView: UIView!
     private var showWebPreviewButtonHostingController: UIHostingController<WMFSmallButton>?
 
@@ -105,6 +112,7 @@ class EditSaveViewController: WMFScrollViewController, Themeable, UITextFieldDel
         }
     }
     private let wikiTextSectionUploader = WikiTextSectionUploader()
+    private let wikitextFetcher = WikitextFetcher()
 
     private var styles: HtmlUtils.Styles {
         HtmlUtils.Styles(font: WMFFont.for(.caption1, compatibleWith: traitCollection), boldFont: WMFFont.for(.boldCaption1, compatibleWith: traitCollection), italicsFont: WMFFont.for(.italicCaption1, compatibleWith: traitCollection), boldItalicsFont: WMFFont.for(.caption1, compatibleWith: traitCollection), color: theme.colors.primaryText, linkColor: theme.colors.link, lineSpacing: 3)
@@ -142,37 +150,27 @@ class EditSaveViewController: WMFScrollViewController, Themeable, UITextFieldDel
 
 
     private func updateNavigation(for mode: NavigationMode) {
-        var backButton: UIBarButtonItem?
         var forwardButton: UIBarButtonItem?
         
         switch mode {
         case .wikitext:
-            backButton = buttonLeftCaret
             forwardButton = buttonNext
         case .abuseFilterWarning:
-            backButton = buttonLeftCaret
             forwardButton = buttonSave
         case .abuseFilterDisallow:
-            backButton = buttonLeftCaret
             forwardButton = nil
         case .preview:
-            backButton = buttonLeftCaret
             forwardButton = buttonSave
         case .captcha:
-            backButton = buttonX
             forwardButton = buttonSave
         }
-        navigationItem.leftBarButtonItem = backButton
         navigationItem.rightBarButtonItem = forwardButton
     }
-
-    @objc private func goBack() {
-        
+    
+    private func tappedBack() {
         imageRecLoggingDelegate?.logEditSaveViewControllerDidTapBack()
         
         delegate?.editSaveViewControllerWillCancel(SaveData(summmaryText: summaryText, isMinorEdit: minorEditToggle.isOn, shouldAddToWatchList: addToWatchlistToggle.isOn))
-        
-        navigationController?.popViewController(animated: true)
     }
     
     @objc private func goForward() {
@@ -196,7 +194,9 @@ class EditSaveViewController: WMFScrollViewController, Themeable, UITextFieldDel
             dividerHeightContraint.constant = 1.0 / UIScreen.main.scale
         }
         
-        if !(dataStore?.authenticationManager.isLoggedIn ?? false) {
+        let isPermanent = dataStore?.authenticationManager.authStateIsPermanent ?? false
+        
+        if !isPermanent {
             addToWatchlistStackView.isHidden = true
         }
 
@@ -212,12 +212,13 @@ class EditSaveViewController: WMFScrollViewController, Themeable, UITextFieldDel
         vc.apply(theme: theme)
         vc.setLanguage(for: pageURL)
         vc.cannedSummaryTypes = cannedSummaryTypes
+        self.editSummaryViewController = vc
         wmf_add(childController: vc, andConstrainToEdgesOfContainerView: editSummaryVCContainer)
 
-        if dataStore?.authenticationManager.isLoggedIn ?? false {
+        if isPermanent {
             licenseLoginTextView.isHidden = true
         }
-
+        
         if let savedData = savedData {
             vc.updateInputText(to: savedData.summmaryText)
             minorEditToggle.isOn = savedData.isMinorEdit
@@ -226,11 +227,81 @@ class EditSaveViewController: WMFScrollViewController, Themeable, UITextFieldDel
         
         addToWatchlistToggle.addTarget(self, action: #selector(toggledWatchlist), for: .valueChanged)
         fetchWatchlistStatusAndUpdateToggle()
+
+        Task {
+            wikiHasTempAccounts = await checkWikiStatus()
+        }
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        configureNavigationBar()
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         imageRecLoggingDelegate?.logEditSaveViewControllerDidAppear()
+
+        guard let dataStore else { return }
+
+        if !dataStore.authenticationManager.authStateIsPermanent {
+
+            if let wikiHasTempAccounts, dataStore.authenticationManager.authStateIsTemporary && wikiHasTempAccounts {
+                // Notice
+                let format = CommonStrings.saveViewTempAccountNotice
+                let username = dataStore.authenticationManager.authStateTemporaryUsername ?? "*****"
+                let title = String.localizedStringWithFormat(format, username)
+                let image = UIImage(systemName: "exclamationmark.circle.fill")
+                WMFAlertManager.sharedInstance.showBottomAlertWithMessage(
+                    title,
+                    subtitle: nil,
+                    image: image,
+                    type: .custom,
+                    customTypeName: "edit-published",
+                    dismissPreviousAlerts: true,
+                    buttonTitle: CommonStrings.tempAccountsReadMoreTitle,
+                    buttonCallBack: {
+                        guard let navigationController = self.navigationController else { return }
+                        let tempAccountSheetCoordinator = TempAccountSheetCoordinator(navigationController: navigationController, theme: self.theme, dataStore: dataStore, didTapDone: { [weak self] in
+                            self?.dismiss(animated: true)
+                        }, didTapContinue: { [weak self] in
+                            self?.dismiss(animated: true)
+                        }, isTempAccount: true)
+
+                        _ = tempAccountSheetCoordinator.start()
+                    }
+                )
+            } else {
+                // Warning
+                let title = CommonStrings.saveViewTempAccountWarning
+                let image = UIImage(systemName: "exclamationmark.triangle.fill")
+                WMFAlertManager.sharedInstance.showBottomAlertWithMessage(
+                    title,
+                    subtitle: nil,
+                    image: image,
+                    type: .custom,
+                    customTypeName: "edit-published",
+                    dismissPreviousAlerts: true,
+                    buttonTitle: CommonStrings.tempAccountsReadMoreTitle,
+                    buttonCallBack: {
+                        guard let navigationController = self.navigationController else { return }
+                        let tempAccountSheetCoordinator = TempAccountSheetCoordinator(navigationController: navigationController, theme: self.theme, dataStore: dataStore, didTapDone: { [weak self] in
+                            self?.dismiss(animated: true)
+                        }, didTapContinue: { [weak self] in
+                            self?.dismiss(animated: true)
+                        }, isTempAccount: false)
+
+                        _ = tempAccountSheetCoordinator.start()
+                    }
+                )
+            }
+        }
+    }
+
+    private func configureNavigationBar() {
+        let titleConfig = WMFNavigationBarTitleConfig(title: WMFLocalizedString("wikitext-preview-save-changes-title", value: "Save changes", comment: "Title for edit preview screens"), customView: nil, alignment: .centerCompact)
+        configureNavigationBar(titleConfig: titleConfig, closeButtonConfig: nil, profileButtonConfig: nil, tabsButtonConfig: nil, searchBarConfig: nil, hideNavigationBarOnScroll: false)
     }
 
     func setupSemanticContentAttibute() {
@@ -249,9 +320,6 @@ class EditSaveViewController: WMFScrollViewController, Themeable, UITextFieldDel
     }
 
     private func setupButtonsAndTitle() {
-        navigationItem.title = WMFLocalizedString("wikitext-preview-save-changes-title", value: "Save changes", comment: "Title for edit preview screens")
-        buttonX = UIBarButtonItem.wmf_buttonType(.X, target: self, action: #selector(self.goBack))
-        buttonLeftCaret = UIBarButtonItem.wmf_buttonType(.caretLeft, target: self, action: #selector(self.goBack))
 
         buttonSave = UIBarButtonItem(title: CommonStrings.publishTitle, style: .done, target: self, action: #selector(self.goForward))
         buttonSave?.tintColor = theme.colors.secondaryText
@@ -295,12 +363,15 @@ class EditSaveViewController: WMFScrollViewController, Themeable, UITextFieldDel
     private func fetchWatchlistStatusAndUpdateToggle() {
         guard let siteURL = pageURL?.wmf_site,
            let project = WikimediaProject(siteURL: siteURL)?.wmfProject,
-            let title = pageURL?.wmf_title else {
+            let title = pageURL?.wmf_title,
+            let dataStore = dataStore,
+        let request = try? WMFArticleDataController.ArticleInfoRequest(needsWatchedStatus: dataStore.authenticationManager.authStateIsPermanent, needsRollbackRights: false, needsCategories: false) else {
             return
         }
         
-        let dataController = WMFWatchlistDataController()
-        dataController.fetchWatchStatus(title: title, project: project) { [weak self] result in
+        let dataController = WMFArticleDataController()
+
+        dataController.fetchArticleInfo(title: title, project: project, request: request) { [weak self] result in
             DispatchQueue.main.async {
                 switch result {
                 case .success(let status):
@@ -311,7 +382,14 @@ class EditSaveViewController: WMFScrollViewController, Themeable, UITextFieldDel
             }
         }
     }
-    
+
+    private func checkWikiStatus() async -> Bool? {
+        guard let languageCode else { return false }
+        let dataController = WMFTempAccountDataController.shared
+        return await dataController.asyncCheckWikiTempAccountAvailability(language: languageCode, isCheckingPrimaryWiki: false)
+
+    }
+
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         updateTextViews()
@@ -337,7 +415,7 @@ class EditSaveViewController: WMFScrollViewController, Themeable, UITextFieldDel
             }
 
             loginVC.apply(theme: theme)
-            present(WMFThemeableNavigationController(rootViewController: loginVC, theme: theme), animated: true)
+            present(WMFComponentNavigationController(rootViewController: loginVC, modalPresentationStyle: .overFullScreen), animated: true)
         }
     }
     
@@ -348,9 +426,21 @@ class EditSaveViewController: WMFScrollViewController, Themeable, UITextFieldDel
     override func viewWillDisappear(_ animated: Bool) {
         WMFAlertManager.sharedInstance.dismissAlert()
         super.viewWillDisappear(animated)
+        
+        if isMovingFromParent {
+            tappedBack()
+        }
     }
 
     private func save() {
+        guard let dataStore else { return }
+        if !dataStore.authenticationManager.authStateIsPermanent {
+            if dataStore.authenticationManager.authStateIsTemporary {
+                authState = .tempAccount
+            } else {
+                authState = .ipAccount
+            }
+        }
         WMFAlertManager.sharedInstance.showAlert(WMFLocalizedString("wikitext-upload-save", value: "Publishing...", comment: "Alert text shown when changes to section wikitext are being published {{Identical|Publishing}}"), sticky: true, dismissPreviousAlerts: true, tapCallBack: nil)
         
         guard let editURL = pageURL else {
@@ -390,7 +480,9 @@ class EditSaveViewController: WMFScrollViewController, Themeable, UITextFieldDel
         let editTagStrings = editTags?.map { $0.rawValue }
         
         wikiTextSectionUploader.uploadWikiText(wikitext, forArticleURL: editURL, section: section, summary: summaryText, isMinorEdit: minorEditToggle.isOn, addToWatchlist: addToWatchlistToggle.isOn, baseRevID: nil, captchaId: captchaViewController?.captcha?.captchaID, captchaWord: captchaViewController?.solution, editTags: editTagStrings, completion: { (result, error) in
+            
             DispatchQueue.main.async {
+                
                 if let error = error {
                     self.handleEditFailure(with: error)
                     return
@@ -406,32 +498,54 @@ class EditSaveViewController: WMFScrollViewController, Themeable, UITextFieldDel
     }
     
     private func handleEditSuccess(with result: [AnyHashable: Any]) {
+        var needsNewTempAccountToast = false
+        guard let dataStore else { return }
+        if let wikiHasTempAccounts, wikiHasTempAccounts, !dataStore.authenticationManager.authStateIsPermanent {
+            if dataStore.authenticationManager.authStateIsTemporary {
+                if authState == .ipAccount {
+                    needsNewTempAccountToast = true
+                }
+           }
+      }
+
         let notifyDelegate: (Result<EditorChanges, Error>) -> Void = { result in
-            DispatchQueue.main.async {
-                self.delegate?.editSaveViewControllerDidSave(self, result: result)
-            }
+            self.delegate?.editSaveViewControllerDidSave(self, result: result, needsNewTempAccountToast: needsNewTempAccountToast)
         }
         guard let fetchedData = result as? [String: Any],
               let newRevID = fetchedData["newrevid"] as? UInt64 else {
             assertionFailure("Could not extract rev id as Int")
-            notifyDelegate(.failure(RequestError.unexpectedResponse))
+            DispatchQueue.main.async {
+                notifyDelegate(.failure(RequestError.unexpectedResponse))
+            }
             return
         }
         
-        if let pageURL,
-        let project = WikimediaProject(siteURL: pageURL) {
+        let completion: (UInt64) -> Void = { [weak self] newRevID in
             
-            if let source {
-                editorLoggingDelegate?.logEditSaveViewControllerPublishSuccess(source: source, revisionID: newRevID, project: project)
+            guard let self else {
+                return
             }
             
-            EditAttemptFunnel.shared.logSaveSuccess(pageURL: pageURL, revisionId: Int(newRevID))
-            
+            DispatchQueue.main.async {
+                
+                if let pageURL = self.pageURL,
+                   let project = WikimediaProject(siteURL: pageURL) {
+                    
+                    if let source = self.source {
+                        self.editorLoggingDelegate?.logEditSaveViewControllerPublishSuccess(source: source, revisionID: newRevID, project: project)
+                    }
+                    
+                    EditAttemptFunnel.shared.logSaveSuccess(pageURL: pageURL, revisionId: Int(newRevID))
+                    
+                }
+                
+                self.imageRecLoggingDelegate?.logEditSaveViewControllerPublishSuccess(revisionID: Int(newRevID), summaryAdded: !self.summaryText.isEmpty)
+                
+                notifyDelegate(.success(EditorChanges(newRevisionID: newRevID)))
+            }
         }
         
-        imageRecLoggingDelegate?.logEditSaveViewControllerPublishSuccess(revisionID: Int(newRevID), summaryAdded: !summaryText.isEmpty)
-        
-        notifyDelegate(.success(EditorChanges(newRevisionID: newRevID, postedWikitext: wikitext)))
+        completion(newRevID)
     }
     
     private func handleEditFailure(with error: Error) {
@@ -578,10 +692,15 @@ class EditSaveViewController: WMFScrollViewController, Themeable, UITextFieldDel
 
         minorEditLabel.textColor = theme.colors.primaryText
         minorEditButton.titleLabel?.textColor = theme.colors.link
+        minorEditButton.tintColor = theme.colors.link
         addToWatchlistLabel.textColor = theme.colors.primaryText
         addToWatchlistButton.titleLabel?.textColor = theme.colors.link
+        addToWatchlistButton.tintColor = theme.colors.link
         scrollContainer.backgroundColor = theme.colors.paperBackground
         captchaContainer.backgroundColor = theme.colors.paperBackground
+        
+        editSummaryViewController?.apply(theme: theme)
+        captchaViewController?.apply(theme: theme)
         
         applyThemeToTextViews()
         

@@ -20,9 +20,11 @@ final class TalkPageViewModel {
 
     let authenticationManager: WMFAuthenticationManager
     let languageLinkController: MWKLanguageLinkController
+    let dataStore: MWKDataStore
     var deepLinkData: DeepLinkData?
     let dataController: TalkPageDataController
-    
+    var wikiHasTempAccounts: Bool?
+
     private var dateFormatter: DateFormatter?
     private(set) var semanticContentAttribute: UISemanticContentAttribute
 
@@ -49,7 +51,7 @@ final class TalkPageViewModel {
     ///   - siteURL: Site URL without article path, e.g. "https://en.wikipedia.org"
     ///   - articleSummaryController: article summary controller from the MWKDataStore singleton
     ///   - authenticationManager: authentication manager from the MWKDataStore singleton
-    init?(pageType: TalkPageType, pageTitle: String, siteURL: URL, source: RoutingUserInfoSourceValue, articleSummaryController: ArticleSummaryController, authenticationManager: WMFAuthenticationManager, languageLinkController: MWKLanguageLinkController) {
+    init?(pageType: TalkPageType, pageTitle: String, siteURL: URL, source: RoutingUserInfoSourceValue, articleSummaryController: ArticleSummaryController, authenticationManager: WMFAuthenticationManager, languageLinkController: MWKLanguageLinkController, dataStore: MWKDataStore) {
         
         guard let project = WikimediaProject(siteURL: siteURL, languageLinkController: languageLinkController) else {
             return nil
@@ -63,6 +65,7 @@ final class TalkPageViewModel {
         self.dataController = TalkPageDataController(pageType: pageType, pageTitle: pageTitle, siteURL: siteURL, articleSummaryController: articleSummaryController)
         self.authenticationManager = authenticationManager
         self.languageLinkController = languageLinkController
+        self.dataStore = dataStore
         
         // Setting headerTitle as pageTitle (which contains the namespace prefix) for now, we attempt to strip the namespace later in populateHeaderData
         self.headerTitle = pageTitle
@@ -77,12 +80,12 @@ final class TalkPageViewModel {
     ///   - pageURL: Full wiki page URL, e.g. https://en.wikipedia.org/wiki/Cat
     ///   - articleSummaryController: article summary controller from the MWKDataStore singleton
     ///   - authenticationManager: authentication manager from the MWKDataStore singleton
-    convenience init?(pageType: TalkPageType, pageURL: URL, source: RoutingUserInfoSourceValue, articleSummaryController: ArticleSummaryController, authenticationManager: WMFAuthenticationManager, languageLinkController: MWKLanguageLinkController) {
+    convenience init?(pageType: TalkPageType, pageURL: URL, source: RoutingUserInfoSourceValue, articleSummaryController: ArticleSummaryController, authenticationManager: WMFAuthenticationManager, languageLinkController: MWKLanguageLinkController, dataStore: MWKDataStore) {
         guard let pageTitle = pageURL.wmf_title, let siteURL = pageURL.wmf_site else {
             return nil
         }
 
-        self.init(pageType: pageType, pageTitle: pageTitle, siteURL: siteURL, source: source, articleSummaryController: articleSummaryController, authenticationManager: authenticationManager, languageLinkController: languageLinkController)
+        self.init(pageType: pageType, pageTitle: pageTitle, siteURL: siteURL, source: source, articleSummaryController: articleSummaryController, authenticationManager: authenticationManager, languageLinkController: languageLinkController, dataStore: dataStore)
     }
 
     // MARK: - Public
@@ -96,8 +99,8 @@ final class TalkPageViewModel {
         dataController.resetToNewSiteURL(siteURL, pageTitle: pageTitle)
     }
 
-    var isUserLoggedIn: Bool {
-        return authenticationManager.isLoggedIn
+    var isUserPermanent: Bool {
+        return authenticationManager.authStateIsPermanent
     }
 
     func fetchTalkPage(completion: @escaping (Result<Int?, Error>) -> Void) {
@@ -125,11 +128,11 @@ final class TalkPageViewModel {
         }
     }
 
-    func postTopic(topicTitle: String, topicBody: String, completion: @escaping(Result<Void, Error>) -> Void) {
+    func postTopic(topicTitle: String, topicBody: String, completion: @escaping (Result<Void, Error>) -> Void) {
         dataController.postTopic(topicTitle: topicTitle, topicBody: topicBody, completion: completion)
     }
     
-    func postReply(commentId: String, comment: String, completion: @escaping(Result<Void, Error>) -> Void) {
+    func postReply(commentId: String, comment: String, completion: @escaping (Result<Void, Error>) -> Void) {
         dataController.postReply(commentId: commentId, comment: comment, completion: completion)
     }
     
@@ -171,11 +174,8 @@ final class TalkPageViewModel {
     // MARK: - Private
     
     private static func dateFormatterForSiteURL(_ siteURL: URL) -> DateFormatter? {
-        guard let languageCode = siteURL.wmf_languageCode else {
-            return nil
-        }
-        
-        return DateFormatter.wmf_localCustomShortDateFormatterWithTime(for: NSLocale.wmf_locale(for: languageCode))
+        guard siteURL.wmf_languageCode != nil else { return nil }
+        return DateFormatter.wmf_localCustomShortDateFormatterWithTime(for: Locale.current)
     }
     
     private static func semanticContentAttributeForSiteURL(_ siteURL: URL) -> UISemanticContentAttribute {
@@ -224,7 +224,7 @@ final class TalkPageViewModel {
             // set up cell view model with otherContent and continue to next topic
             if let otherContent = topic.otherContent,
                topic.replies.isEmpty {
-                let topicViewModel = TalkPageCellViewModel(id: topic.id, topicTitleHtml: topicTitleHtml, timestamp: nil, topicName: topicName, leadComment: nil, otherContentHtml: otherContent, replies: [], activeUsersCount: nil, isUserLoggedIn: isUserLoggedIn, dateFormatter: dateFormatter)
+                let topicViewModel = TalkPageCellViewModel(id: topic.id, topicTitleHtml: topicTitleHtml, timestamp: nil, topicName: topicName, leadComment: nil, otherContentHtml: otherContent, replies: [], activeUsersCount: nil, isUserPermanent: isUserPermanent, dateFormatter: dateFormatter)
                 self.topics.append(topicViewModel)
                 continue
             }
@@ -262,7 +262,7 @@ final class TalkPageViewModel {
             
             let activeUsersCount = activeUsersCount(topic: topic)
 
-            let topicViewModel = TalkPageCellViewModel(id: topic.id, topicTitleHtml: topicTitleHtml, timestamp: firstReply.timestamp, topicName: topicName, leadComment: leadCommentViewModel, otherContentHtml: nil, replies: remainingCommentViewModels, activeUsersCount: activeUsersCount, isUserLoggedIn: isUserLoggedIn, dateFormatter: dateFormatter)
+            let topicViewModel = TalkPageCellViewModel(id: topic.id, topicTitleHtml: topicTitleHtml, timestamp: firstReply.timestamp, topicName: topicName, leadComment: leadCommentViewModel, otherContentHtml: nil, replies: remainingCommentViewModels, activeUsersCount: activeUsersCount, isUserPermanent: isUserPermanent, dateFormatter: dateFormatter)
             topicViewModel.viewModel = self
 
             // Note this is a nested loop, so it will not perform well with many topics.

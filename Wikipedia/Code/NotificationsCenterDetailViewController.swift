@@ -1,8 +1,9 @@
 import UIKit
 import WMF
 import SwiftUI
+import WMFComponents
 
-final class NotificationsCenterDetailViewController: ViewController {
+final class NotificationsCenterDetailViewController: ThemeableViewController, WMFNavigationBarConfiguring {
 
     // MARK: - Properties
 
@@ -16,7 +17,9 @@ final class NotificationsCenterDetailViewController: ViewController {
 
     init(theme: Theme, viewModel: NotificationsCenterDetailViewModel) {
         self.viewModel = viewModel
-        super.init(theme: theme)
+        super.init(nibName: nil, bundle: nil)
+        self.theme = theme
+        hidesBottomBarWhenPushed = true
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -26,22 +29,22 @@ final class NotificationsCenterDetailViewController: ViewController {
     override func loadView() {
         let detailView = NotificationsCenterDetailView(frame: UIScreen.main.bounds)
         view = detailView
-        scrollView = detailView.tableView
 
         detailView.tableView.dataSource = self
         detailView.tableView.delegate = self
     }
     
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        setupNavigationBar()
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        configureNavigationBar()
     }
     
-    private func setupNavigationBar() {
+    private func configureNavigationBar() {
         
-        let detailTitle = WMFLocalizedString("notifications-center-detail-title", value: "Notification Detail", comment: "Title of notification detail view, displayed after tapping a notification in Notifications Center.")
-        
-        navigationItem.configureForEmptyNavBarTitle(backTitle: detailTitle)
+        let titleConfig = WMFNavigationBarTitleConfig(title: WMFLocalizedString("notifications-center-detail-title", value: "Notification Detail", comment: "Title of notification detail view, displayed after tapping a notification in Notifications Center."), customView: nil, alignment: .hidden)
+
+        configureNavigationBar(titleConfig: titleConfig, closeButtonConfig: nil, profileButtonConfig: nil, tabsButtonConfig: nil, searchBarConfig: nil, hideNavigationBarOnScroll: false)
     }
 
     // MARK: - Themeable
@@ -108,13 +111,30 @@ extension NotificationsCenterDetailViewController: UITableViewDelegate, UITableV
             
             logNotificationInteraction(with: actionCell.action)
             
-            var userInfo: [AnyHashable : Any] = [RoutingUserInfoKeys.source: RoutingUserInfoSourceValue.notificationsCenter.rawValue]
-            
-            if let replyText = viewModel.contentBody {
-                userInfo[RoutingUserInfoKeys.talkPageReplyText] = replyText as Any
+            let legacyNavigateAction = { [weak self] in
+                
+                guard let self else { return }
+                var userInfo: [AnyHashable : Any] = [RoutingUserInfoKeys.source: RoutingUserInfoSourceValue.notificationsCenter.rawValue]
+                
+                if let replyText = viewModel.contentBody {
+                    userInfo[RoutingUserInfoKeys.talkPageReplyText] = replyText as Any
+                }
+                
+                navigate(to: url, userInfo: userInfo)
             }
             
-            navigate(to: url, userInfo: userInfo)
+            // first try to navigate using LinkCoordinator. If it fails, use the legacy approach.
+            if let navigationController {
+                
+                let linkCoordinator = LinkCoordinator(navigationController: navigationController, url: url, dataStore: nil, theme: theme, articleSource: .undefined)
+                let success = linkCoordinator.start()
+                guard success else {
+                    legacyNavigateAction()
+                    return
+                }
+            } else {
+                legacyNavigateAction()
+            }
         }
 
         tableView.deselectRow(at: indexPath, animated: true)

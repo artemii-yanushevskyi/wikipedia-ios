@@ -133,6 +133,8 @@ import WMFData
         case appDonorExperience = "app_donor_experience"
         case editInteraction = "ios.edit_interaction"
         case imageRecommendation = "android.image_recommendation_event"
+        case articleLinkInteraction = "ios.article_link_interaction"
+        case appTabsInteraction = "app_tabs_interaction"
     }
     
     /**
@@ -145,20 +147,21 @@ import WMFData
      * analytics-related schemas are collected.
      */
     public enum Schema: String, Codable {
-        case editHistoryCompare = "/analytics/mobile_apps/ios_edit_history_compare/2.1.0"
-        case remoteNotificationsInteraction = "/analytics/mobile_apps/ios_notification_interaction/2.1.0"
-        case talkPages = "/analytics/mobile_apps/ios_talk_page_interaction/2.0.0"
-        case readingLists = "/analytics/mobile_apps/ios_reading_lists/2.1.0"
-        case userHistory = "/analytics/mobile_apps/ios_user_history/1.0.0"
-        case search = "/analytics/mobile_apps/ios_search/2.1.0"
-        case sessions = "/analytics/mobile_apps/app_session/1.0.0"
-        case settings = "/analytics/mobile_apps/ios_setting_action/1.0.0"
-        case login = "/analytics/mobile_apps/ios_login_action/1.0.2"
-        case navigation = "/analytics/mobile_apps/ios_navigation_events/1.0.0"
+        case editHistoryCompare = "/analytics/mobile_apps/ios_edit_history_compare/2.2.0"
+        case remoteNotificationsInteraction = "/analytics/mobile_apps/ios_notification_interaction/2.2.0"
+        case talkPages = "/analytics/mobile_apps/ios_talk_page_interaction/2.1.0"
+        case readingLists = "/analytics/mobile_apps/ios_reading_lists/2.2.0"
+        case userHistory = "/analytics/mobile_apps/ios_user_history/2.0.0"
+        case search = "/analytics/mobile_apps/ios_search/2.3.1"
+        case sessions = "/analytics/mobile_apps/app_session/1.1.0"
+        case settings = "/analytics/mobile_apps/ios_setting_action/1.1.0"
+        case login = "/analytics/mobile_apps/ios_login_action/1.1.0"
+        case navigation = "/analytics/mobile_apps/ios_navigation_events/1.1.0"
         case editAttempt = "/analytics/legacy/editattemptstep/2.0.3"
-        case watchlist = "/analytics/mobile_apps/ios_watchlists/4.0.0"
-        case appInteraction = "/analytics/mobile_apps/app_interaction/1.0.0"
-        case imageRecommendation = "/analytics/mobile_apps/android_image_recommendation_event/1.0.0"
+        case watchlist = "/analytics/mobile_apps/ios_watchlists/4.1.0"
+        case appInteraction = "/analytics/mobile_apps/app_interaction/1.1.0"
+        case imageRecommendation = "/analytics/mobile_apps/android_image_recommendation_event/1.1.0"
+        case articleLinkInteraction = "/analytics/mobile_apps/ios_article_link_interaction/2.0.0"
     }
 
     /**
@@ -236,7 +239,11 @@ import WMFData
 
 
     private var isAnon: Bool {
-        return !dataStore.authenticationManager.isLoggedIn
+        return !dataStore.authenticationManager.authStateIsPermanent
+    }
+    
+    private var isTemp: Bool {
+        return dataStore.authenticationManager.authStateIsTemporary
     }
 
     private var _primaryLanguage: String {
@@ -316,8 +323,8 @@ import WMFData
      */
     private func loadStreamConfiguration(_ data: Data) {
         #if DEBUG
-        if let raw = String.init(data: data, encoding: String.Encoding.utf8) {
-            DDLogDebug("EPC: Downloaded stream configs (raw): \(raw)")
+        if String.init(data: data, encoding: String.Encoding.utf8) != nil {
+            DDLogDebug("EPC: Downloaded stream configs (line break here to read raw configs)")
         }
         #endif
         guard let storageManager = self.storageManager else {
@@ -494,6 +501,13 @@ import WMFData
         **/
 
         let isAnon: Bool
+        
+        /**
+         * Not a required field, but we want to send it for all iOS schemas
+         * True if there are no stored credentials but we have a central auth username cookie.
+        **/
+
+        let isTemp: Bool
 
         /**
          * Required field for all iOS schemas
@@ -509,6 +523,7 @@ import WMFData
             case dt
             case event
             case isAnon = "is_anon"
+            case isTemp = "is_temp"
             case primaryLanguage = "primary_language"
         }
         
@@ -521,6 +536,7 @@ import WMFData
                 try container.encode(dt, forKey: .dt)
                 try container.encode(E.schema, forKey: .schema)
                 try container.encode(isAnon, forKey: .isAnon)
+                try container.encode(isTemp, forKey: .isTemp)
                 try container.encode(primaryLanguage, forKey: .primaryLanguage)
                 try event.encode(to: encoder)
             } catch let error {
@@ -606,7 +622,7 @@ import WMFData
         }
         
         let meta = Meta(stream: stream, id: UUID(), domain: domain)
-        let eventPayload: Encodable = needsMinimal ? MinimalEventBody<E>(meta: meta, dt: date, event: event) : EventBody<E>(meta: meta, appInstallID: appInstallID, appSessionID: sessionID, dt: date, event: event, isAnon: isAnon, primaryLanguage: primaryLanguage)
+        let eventPayload: Encodable = needsMinimal ? MinimalEventBody<E>(meta: meta, dt: date, event: event) : EventBody<E>(meta: meta, appInstallID: appInstallID, appSessionID: sessionID, dt: date, event: event, isAnon: isAnon, isTemp: isTemp, primaryLanguage: primaryLanguage)
         do {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
@@ -618,8 +634,12 @@ import WMFData
             let data = try encoder.encode(eventPayload)
             
             #if DEBUG
-            let jsonString = String(data: data, encoding: .utf8)!
-            DDLogDebug("EPC: Scheduling event to be sent to \(EventPlatformClient.eventIntakeURI) with POST body:\n\(jsonString)")
+            // Convert to loose dictionary so we can sort keys and print that way.
+            if let dict = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+                let printablePayload = PrintableEventPayload(payload: dict)
+                DDLogDebug("\n\n📊EPC: Scheduling event to be sent to \(EventPlatformClient.eventIntakeURI):")
+                DDLogDebug("\(printablePayload)")
+            }
             #endif
             
             guard let streamConfigs = streamConfigurations else {
@@ -627,11 +647,11 @@ import WMFData
                 return
             }
             guard let config = streamConfigs[stream] else {
-                DDLogDebug("EPC: Event submitted to '\(stream)' but only the following streams are configured: \(streamConfigs.keys.map(\.rawValue).joined(separator: ", "))")
+                DDLogError("EPC: Event submitted to '\(stream)' but only the following streams are configured: \(streamConfigs.keys.map(\.rawValue).joined(separator: ", "))")
                 return
             }
             guard samplingController.inSample(stream: stream, config: config) else {
-                DDLogDebug("EPC: Stream '\(stream.rawValue)' is not in sample")
+                DDLogWarn("EPC: Stream '\(stream.rawValue)' is not in sample")
                 return
             }
             storageManager.push(data: data, stream: stream)
@@ -756,4 +776,25 @@ public protocol EventInterface: Codable {
      * Check the documentation for `EPC.Schema` for more information.
      */
     static var schema: EventPlatformClient.Schema { get }
+}
+
+private class PrintableEventPayload: CustomStringConvertible {
+    let payload: [String: Any]
+    
+    init(payload: [String : Any]) {
+        self.payload = payload
+    }
+    
+    var description: String {
+        var description = ""
+        let sortedElements = payload.sorted( by: { $0.0 < $1.0 })
+        
+        for (key, value) in sortedElements {
+            description += "\n\(key): \(value)"
+        }
+        
+        description += "\n\n"
+        
+        return description
+    }
 }

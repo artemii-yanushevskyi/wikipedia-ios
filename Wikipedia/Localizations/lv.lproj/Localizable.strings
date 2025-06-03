@@ -57,7 +57,6 @@
 "button-next" = "Tālāk";
 "button-ok" = "Labi";
 "button-publish" = "Publicēt";
-"button-read-now" = "Lasīt tagad";
 "button-report-a-bug" = "Ziņot par kļūdu";
 "button-skip" = "Izlaist";
 "cancel" = "Atcelt";
@@ -124,7 +123,6 @@
 "main-menu-about" = "Par lietotni";
 "main-menu-account-login" = "Pieslēgties";
 "main-menu-account-logout" = "Iziet";
-"main-menu-account-logout-cancel" = "Atcelt";
 "main-menu-heading-legal" = "Privātuma politika un nosacījumi";
 "main-menu-nearby" = "Tuvumā";
 "main-menu-privacy-policy" = "Privātuma politika";
@@ -132,7 +130,6 @@
 "main-menu-terms-of-use" = "Lietošanas noteikumi";
 "main-menu-title" = "Vairāk";
 "main-menu-zero-faq" = "Vikipēdija Zero BUJ";
-"menu-cancel-accessibility-label" = "Atcelt";
 // Fuzzy
 "more-languages-tooltip-description" = "Meklē Vikipēdijā gandrīz 300 valodās";
 "more-languages-tooltip-title" = "Pievienot valodas";

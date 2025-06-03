@@ -3,6 +3,7 @@ import UIKit
 import SwiftUI
 import Combine
 import WMF
+import WMFComponents
 
 struct TalkPageArchivesViewModel {
     let siteURL: URL
@@ -11,6 +12,7 @@ struct TalkPageArchivesViewModel {
     let articleSummaryController: ArticleSummaryController
     let authenticationManager: WMFAuthenticationManager
     let languageLinkController: MWKLanguageLinkController
+    let dataStore: MWKDataStore
     
     init(talkPageViewModel: TalkPageViewModel) {
         self.siteURL = talkPageViewModel.siteURL
@@ -19,20 +21,14 @@ struct TalkPageArchivesViewModel {
         self.articleSummaryController = talkPageViewModel.dataController.articleSummaryController
         self.authenticationManager = talkPageViewModel.authenticationManager
         self.languageLinkController = talkPageViewModel.languageLinkController
+        self.dataStore = talkPageViewModel.dataStore
     }
 }
 
-class TalkPageArchivesViewController: UIViewController, Themeable, ShiftingTopViewsContaining {
+class TalkPageArchivesViewController: UIViewController, Themeable, WMFNavigationBarConfiguring {
 
     private let viewModel: TalkPageArchivesViewModel
     private var observableTheme: ObservableTheme
-
-    var shiftingTopViewsStack: ShiftingTopViewsStack?
-    
-    lazy var barView: ShiftingNavigationBarView = {
-        let items = navigationController?.viewControllers.map({ $0.navigationItem }) ?? []
-        return ShiftingNavigationBarView(shiftOrder: 1, navigationItems: items, hidesOnScroll: false, popDelegate: self)
-    }()
 
     init(viewModel: TalkPageArchivesViewModel, theme: Theme) {
         self.viewModel = viewModel
@@ -47,23 +43,50 @@ class TalkPageArchivesViewController: UIViewController, Themeable, ShiftingTopVi
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        self.title = WMFLocalizedString("talk-pages-archives-view-title", value: "Archives", comment: "Title of talk page archive list view.")
-
         let archivesView = TalkPageArchivesView(pageTitle: viewModel.pageTitle, siteURL: viewModel.siteURL, didTapItem: didTapItem)
         
-        setup(shiftingTopViews: [barView], shadowBehavior: .show, swiftuiView: archivesView, observableTheme: observableTheme)
+        let finalSwiftUIView = archivesView
+                    .environmentObject(observableTheme)
+        
+        let childHostingVC = UIHostingController(rootView: finalSwiftUIView)
+        
+        childHostingVC.view.translatesAutoresizingMaskIntoConstraints = false
+                view.addSubview(childHostingVC.view)
+
+        NSLayoutConstraint.activate([
+            view.safeAreaLayoutGuide.topAnchor.constraint(equalTo: childHostingVC.view.topAnchor),
+            view.safeAreaLayoutGuide.leadingAnchor.constraint(equalTo: childHostingVC.view.leadingAnchor),
+            view.safeAreaLayoutGuide.trailingAnchor.constraint(equalTo: childHostingVC.view.trailingAnchor),
+            view.safeAreaLayoutGuide.bottomAnchor.constraint(equalTo: childHostingVC.view.bottomAnchor)
+        ])
+
+        addChild(childHostingVC)
+        childHostingVC.didMove(toParent: self)
+        childHostingVC.view.backgroundColor = .clear
 
         apply(theme: observableTheme.theme)
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        configureNavigationBar()
+    }
+    
+    private func configureNavigationBar() {
+        
+        let titleConfig = WMFNavigationBarTitleConfig(title: WMFLocalizedString("talk-pages-archives-view-title", value: "Archives", comment: "Title of talk page archive list view."), customView: nil, alignment: .centerCompact)
+        
+        configureNavigationBar(titleConfig: titleConfig, closeButtonConfig: nil, profileButtonConfig: nil, tabsButtonConfig: nil, searchBarConfig: nil, hideNavigationBarOnScroll: false)
     }
 
     func apply(theme: Theme) {
         observableTheme.theme = theme
         view.backgroundColor = theme.colors.paperBackground
-        shiftingTopViewsStack?.apply(theme: theme)
     }
     
     private func didTapItem(_ item: TalkPageArchivesItem) {
-        guard let viewModel = TalkPageViewModel(pageType: viewModel.pageType, pageTitle: item.title, siteURL: viewModel.siteURL, source: .talkPageArchives, articleSummaryController: viewModel.articleSummaryController, authenticationManager: viewModel.authenticationManager, languageLinkController: viewModel.languageLinkController) else {
+        guard let viewModel = TalkPageViewModel(pageType: viewModel.pageType, pageTitle: item.title, siteURL: viewModel.siteURL, source: .talkPageArchives, articleSummaryController: viewModel.articleSummaryController, authenticationManager: viewModel.authenticationManager, languageLinkController: viewModel.languageLinkController, dataStore: viewModel.dataStore) else {
                 showGenericError()
                 return
             }

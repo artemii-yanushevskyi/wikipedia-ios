@@ -5,7 +5,8 @@ extension ArticleViewController {
         let languagesVC = WMFArticleLanguagesViewController(articleURL: articleURL)
         themesPresenter.dismissReadingThemesPopoverIfActive(from: self)
         languagesVC.delegate = self
-        presentEmbedded(languagesVC, style: .sheet)
+        languagesVC.apply(theme)
+        presentEmbedded(languagesVC)
     }
     
     func showDisambiguation(with payload: Any?) {
@@ -62,14 +63,20 @@ extension ArticleViewController {
         let issues = payload.compactMap { ($0["html"] as? String)?.removingHTML }
         let issuesVC = PageIssuesTableViewController(style: .grouped)
         issuesVC.issues = issues
-        presentEmbedded(issuesVC, style: .sheet)
+        presentEmbedded(issuesVC)
     }
 }
 
 extension ArticleViewController: WMFLanguagesViewControllerDelegate {
     func languagesController(_ controller: WMFLanguagesViewController, didSelectLanguage language: MWKLanguageLink) {
-        dismiss(animated: true) {
-            self.navigate(to: language.articleURL)
+        dismiss(animated: true) { [weak self] in
+            
+            guard let self else { return }
+            
+            guard let navVC = self.navigationController else { return }
+            let articleCoordinator = ArticleCoordinator(navigationController: navVC, articleURL: language.articleURL, dataStore: dataStore, theme: theme, source: .undefined, previousPageViewObjectID: pageViewObjectID)
+            articleCoordinator.start()
+            
             NavigationEventsFunnel.shared.logEvent(action: .articleToolbarLangSuccess)
         }
     }

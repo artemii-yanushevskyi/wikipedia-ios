@@ -9,9 +9,10 @@ struct TalkPageTopicComposeViewModel {
     let semanticContentAttribute: UISemanticContentAttribute
     let siteURL: URL
     let pageLink: URL?
+    let wikiHasTempAccounts: Bool?
 }
 
-class TalkPageTopicComposeViewController: ViewController {
+class TalkPageTopicComposeViewController: ThemeableViewController, WMFNavigationBarConfiguring {
     
     enum TopicComposeStrings {
         static let navigationBarTitle = WMFLocalizedString("talk-pages-topic-compose-navbar-title", value: "Topic", comment: "Top navigation bar title of talk page topic compose screen. Please prioritize for de, ar and zh wikis.")
@@ -32,13 +33,6 @@ class TalkPageTopicComposeViewController: ViewController {
         view.backgroundColor = .clear
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
-    }()
-    
-    lazy var closeButton: UIBarButtonItem = {
-        let button = UIBarButtonItem(image: UIImage(named: "close-inverse"), style: .plain, target: self, action: #selector(tappedClose))
-        button.accessibilityLabel = CommonStrings.closeButtonAccessibilityLabel
-        button.accessibilityHint = WMFLocalizedString("talk-page-topic-close-button-hint", value: "Close new topic", comment: "Accessibility hint for talk page new topic screen close button")
-        return button
     }()
     
     lazy var publishButton: UIBarButtonItem = {
@@ -76,6 +70,7 @@ class TalkPageTopicComposeViewController: ViewController {
         let textfield = UITextField(frame: .zero)
         textfield.translatesAutoresizingMaskIntoConstraints = false
         textfield.addTarget(self, action: #selector(titleTextFieldChanged), for: .editingChanged)
+        textfield.addTarget(self, action: #selector(titleTextFieldBeganEditing), for: .editingDidBegin)
         return textfield
     }()
     
@@ -116,6 +111,27 @@ class TalkPageTopicComposeViewController: ViewController {
         return textView
     }()
     
+    private(set) lazy var ipTempButton: UIButton = {
+        let button = UIButton(type: .custom)
+        
+        var image: UIImage? = nil
+        if let wikiHasTempAccounts = viewModel.wikiHasTempAccounts, wikiHasTempAccounts {
+            if authState == .ip {
+                image = WMFSFSymbolIcon.for(symbol: .temporaryAccountIcon)
+            } else if authState == .temp {
+                image = WMFIcon.temp
+            }
+        }
+
+        if let image {
+            button.setImage(image, for: .normal)
+        }
+        
+        button.addTarget(self, action: #selector(tappedIPTemp), for: .touchUpInside)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        return button
+    }()
+    
     private lazy var activityIndicator: UIActivityIndicatorView = {
         let activityIndicator = UIActivityIndicatorView()
         activityIndicator.color = theme.colors.primaryText
@@ -127,9 +143,13 @@ class TalkPageTopicComposeViewController: ViewController {
     }()
     
     private var scrollViewBottomConstraint: NSLayoutConstraint?
+    private var containerStackViewBottomConstraint: NSLayoutConstraint?
+    
     weak var delegate: TalkPageTopicComposeViewControllerDelegate?
     
     private weak var authenticationManager: WMFAuthenticationManager?
+    
+    private let tappedIPTempButtonAction: () -> Void
 
     override var inputAccessoryView: UIView? {
         if bodyTextView.isFirstResponder {
@@ -143,10 +163,12 @@ class TalkPageTopicComposeViewController: ViewController {
     
     // MARK: Lifecycle
     
-    init(viewModel: TalkPageTopicComposeViewModel, authenticationManager: WMFAuthenticationManager, theme: Theme) {
+    init(viewModel: TalkPageTopicComposeViewModel, authenticationManager: WMFAuthenticationManager, theme: Theme, tappedIPTempButtonAction: @escaping () -> Void) {
         self.viewModel = viewModel
         self.authenticationManager = authenticationManager
-        super.init(theme: theme)
+        self.tappedIPTempButtonAction = tappedIPTempButtonAction
+        super.init(nibName: nil, bundle: nil)
+        self.theme = theme
     }
     
     required init?(coder aDecoder: NSCoder) {
@@ -164,12 +186,27 @@ class TalkPageTopicComposeViewController: ViewController {
         setupContainerStackView()
         updateFonts()
         apply(theme: theme)
-        self.title = Self.TopicComposeStrings.navigationBarTitle
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillChangeFrame(_:)), name: UIWindow.keyboardWillChangeFrameNotification, object: nil)
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        configureNavigationBar()
     }
     
     override func accessibilityPerformEscape() -> Bool {
         tappedClose()
         return true
+    }
+    
+    private func configureNavigationBar() {
+        let titleConfig = WMFNavigationBarTitleConfig(title: Self.TopicComposeStrings.navigationBarTitle, customView: nil, alignment: .centerCompact)
+        
+        let closeConfig = WMFNavigationBarCloseButtonConfig(text: CommonStrings.cancelActionTitle, target: self, action: #selector(tappedClose), alignment: .leading)
+
+        configureNavigationBar(titleConfig: titleConfig, closeButtonConfig: closeConfig, profileButtonConfig: nil, tabsButtonConfig: nil, searchBarConfig: nil, hideNavigationBarOnScroll: false)
     }
 
     private func setupSafeAreaBackgroundView() {
@@ -197,11 +234,41 @@ class TalkPageTopicComposeViewController: ViewController {
         ])
     }
     
+    private enum AuthState {
+        case ip
+        case temp
+        case perm
+    }
+    
+    private var authState: AuthState {
+        if authenticationManager?.authStateIsPermanent ?? false {
+            return .perm
+        } else {
+            if authenticationManager?.authStateIsTemporary ?? false {
+                return .temp
+            } else {
+                return .ip
+            }
+        }
+    }
+    
     private func setupContainerStackView() {
         
         // Container Stack View
         containerScrollView.addSubview(containerStackView)
         containerScrollView.addSubview(bodyPlaceholderLabel)
+        
+        let bottomSpacing: CGFloat
+        if let wikiHasTempAccounts = viewModel.wikiHasTempAccounts, (authState == .ip || authState == .temp) && wikiHasTempAccounts {
+            bottomSpacing = -100 // Add a little spacing to make room for toast
+        } else {
+            bottomSpacing = 0
+        }
+        
+        let containerStackViewBottomConstraint = containerStackView.bottomAnchor.constraint(greaterThanOrEqualTo: containerScrollView.frameLayoutGuide.bottomAnchor, constant: bottomSpacing)
+        
+        containerStackViewBottomConstraint.constant = bottomSpacing
+        self.containerStackViewBottomConstraint = containerStackViewBottomConstraint
         
         NSLayoutConstraint.activate([
             containerStackView.topAnchor.constraint(equalTo: containerScrollView.contentLayoutGuide.topAnchor),
@@ -213,7 +280,7 @@ class TalkPageTopicComposeViewController: ViewController {
             containerStackView.widthAnchor.constraint(equalTo: containerScrollView.frameLayoutGuide.widthAnchor),
             
             // Ensures content stretches at least to the bottom of the screen
-            containerStackView.bottomAnchor.constraint(greaterThanOrEqualTo: containerScrollView.frameLayoutGuide.bottomAnchor)
+            containerStackViewBottomConstraint
         ])
         
         // Inner elements
@@ -223,10 +290,27 @@ class TalkPageTopicComposeViewController: ViewController {
         inputContainerView.addSubview(titleTextField)
         inputContainerView.addSubview(divView)
         inputContainerView.addSubview(bodyTextView)
-        
+
         titleTextField.setContentHuggingPriority(.required, for: .vertical)
         bodyTextView.setContentHuggingPriority(.defaultLow, for: .vertical)
         finePrintTextView.setContentHuggingPriority(.required, for: .vertical)
+
+        if let wikiHasTempAccounts = viewModel.wikiHasTempAccounts, wikiHasTempAccounts {
+            if authState == .ip || authState == .temp {
+                inputContainerView.addSubview(ipTempButton)
+                NSLayoutConstraint.activate([
+                    inputContainerView.leadingAnchor.constraint(equalTo: ipTempButton.leadingAnchor, constant: -8),
+                    inputContainerView.bottomAnchor.constraint(equalTo: ipTempButton.bottomAnchor, constant: 8)
+                ])
+            }
+        }
+
+        var bodyTextViewBottomSpacing: CGFloat = -16
+        if let wikiHasTempAccounts = viewModel.wikiHasTempAccounts, (authState == .ip || authState == .temp) && wikiHasTempAccounts {
+            bodyTextViewBottomSpacing = -50
+        }
+        
+        let bodyTextViewBottomConstraint = bodyTextView.bottomAnchor.constraint(equalTo: inputContainerView.bottomAnchor, constant: bodyTextViewBottomSpacing)
         
         NSLayoutConstraint.activate([
             inputContainerView.widthAnchor.constraint(equalTo: containerStackView.readableContentGuide.widthAnchor),
@@ -244,7 +328,7 @@ class TalkPageTopicComposeViewController: ViewController {
             
             bodyTextView.leadingAnchor.constraint(equalTo: inputContainerView.leadingAnchor, constant: 16),
             bodyTextView.trailingAnchor.constraint(equalTo: inputContainerView.trailingAnchor, constant: -16),
-            bodyTextView.bottomAnchor.constraint(equalTo: inputContainerView.bottomAnchor, constant: -16),
+            bodyTextViewBottomConstraint,
             
             bodyPlaceholderLabel.leadingAnchor.constraint(equalTo: bodyTextView.leadingAnchor),
             bodyPlaceholderLabel.topAnchor.constraint(equalTo: bodyTextView.topAnchor),
@@ -264,7 +348,6 @@ class TalkPageTopicComposeViewController: ViewController {
         }
         
         navigationItem.rightBarButtonItem = rightItem
-        navigationItem.leftBarButtonItem = closeButton
     }
     
     var shouldBlockDismissal: Bool {
@@ -302,33 +385,11 @@ class TalkPageTopicComposeViewController: ViewController {
         updateFonts()
     }
     
-    override func keyboardDidChangeFrame(from oldKeyboardFrame: CGRect?, newKeyboardFrame: CGRect?) {
-        super.keyboardDidChangeFrame(from: oldKeyboardFrame, newKeyboardFrame: newKeyboardFrame)
-        
-        guard oldKeyboardFrame != newKeyboardFrame else {
-            return
-        }
-        
-        guard let newKeyboardFrame = newKeyboardFrame else {
-            scrollViewBottomConstraint?.constant = 0
-            return
-        }
-        
-        let safeAreaKeyboardFrame = safeAreaBackgroundView.frame.intersection(newKeyboardFrame)
-        scrollViewBottomConstraint?.constant = safeAreaKeyboardFrame.height + 16
-        
-        view.setNeedsLayout()
-        UIView.animate(withDuration: 0.2) {
-            self.view.layoutIfNeeded()
-        }
-    }
-    
     override func apply(theme: Theme) {
         super.apply(theme: theme)
         
         navigationController?.navigationBar.titleTextAttributes = theme.navigationBarTitleTextAttributes
         view.backgroundColor = theme.colors.midBackground
-        closeButton.tintColor = theme.colors.tertiaryText
         publishButton.tintColor = theme.colors.link
         containerScrollView.backgroundColor = .clear
         containerStackView.backgroundColor = .clear
@@ -349,6 +410,53 @@ class TalkPageTopicComposeViewController: ViewController {
         
         // Calling here to ensure text alignment is set properly after attributed strings are set
         updateSemanticContentAttribute(semanticContentAttribute: viewModel.semanticContentAttribute)
+
+        if let wikiHasTempAccounts = viewModel.wikiHasTempAccounts, wikiHasTempAccounts {
+            if authState == .ip {
+                ipTempButton.tintColor = theme.colors.destructive
+            } else if authState == .temp {
+                ipTempButton.tintColor = theme.colors.inputAccessoryButtonTint
+            }
+        }
+    }
+    
+    // MARK: - Keyboard
+    
+    @objc func keyboardWillChangeFrame(_ notification: Notification) {
+        if let window = view.window, let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+            let windowFrame = window.convert(endFrame, from: nil)
+            keyboardFrame = window.convert(windowFrame, to: view)
+        }
+    }
+        
+    @objc func keyboardDidHide(_ notification: Notification) {
+        keyboardFrame = nil
+    }
+    
+    private(set) var keyboardFrame: CGRect? {
+        didSet {
+            keyboardDidChangeFrame(from: oldValue, newKeyboardFrame: keyboardFrame)
+        }
+    }
+    
+    func keyboardDidChangeFrame(from oldKeyboardFrame: CGRect?, newKeyboardFrame: CGRect?) {
+
+        guard oldKeyboardFrame != newKeyboardFrame else {
+            return
+        }
+        
+        guard let newKeyboardFrame = newKeyboardFrame else {
+            scrollViewBottomConstraint?.constant = 0
+            return
+        }
+        
+        let safeAreaKeyboardFrame = safeAreaBackgroundView.frame.intersection(newKeyboardFrame)
+        scrollViewBottomConstraint?.constant = safeAreaKeyboardFrame.height + 16
+        
+        view.setNeedsLayout()
+        UIView.animate(withDuration: 0.2) {
+            self.view.layoutIfNeeded()
+        }
     }
     
     // MARK: Private
@@ -397,6 +505,16 @@ class TalkPageTopicComposeViewController: ViewController {
         finePrintTextView.textAlignment = semanticContentAttribute == .forceRightToLeft ? NSTextAlignment.right : NSTextAlignment.left
     }
     
+    private func updateSpacingForWarningToast() {
+        if let wikiHasTempAccounts = viewModel.wikiHasTempAccounts, wikiHasTempAccounts {
+            if authState == .ip || authState == .temp {
+                // Dismiss warning toast
+                WMFAlertManager.sharedInstance.dismissAlert()
+                containerStackViewBottomConstraint?.constant = 0
+            }
+        }
+    }
+    
     // MARK: Actions
     
     @objc private func tappedClose() {
@@ -430,33 +548,47 @@ class TalkPageTopicComposeViewController: ViewController {
         }
 
         guard let authenticationManager = authenticationManager,
-        !authenticationManager.isLoggedIn else {
+              !authenticationManager.authStateIsPermanent else {
             setupNavigationBar(isPublishing: true)
             delegate?.tappedPublish(topicTitle: title, topicBody: body, composeViewController: self)
             return
         }
         
-        wmf_showNotLoggedInUponPublishPanel(buttonTapHandler: { [weak self] buttonIndex in
-            switch buttonIndex {
-            case 0:
-                break
-            case 1:
-                guard let self = self else {
-                    return
+        // TODO: Allow if NOT temp accounts pilot wiki
+        if false {
+            wmf_showNotLoggedInUponPublishPanel(buttonTapHandler: { [weak self] buttonIndex in
+                switch buttonIndex {
+                case 0:
+                    break
+                case 1:
+                    guard let self = self else {
+                        return
+                    }
+                    
+                    self.setupNavigationBar(isPublishing: true)
+                    self.delegate?.tappedPublish(topicTitle: title, topicBody: body, composeViewController: self)
+                default:
+                    assertionFailure("Unrecognize button index in tap handler.")
                 }
-                
-                self.setupNavigationBar(isPublishing: true)
-                self.delegate?.tappedPublish(topicTitle: title, topicBody: body, composeViewController: self)
-            default:
-                assertionFailure("Unrecognize button index in tap handler.")
-            }
-        }, theme: theme)
+            }, theme: theme)
+        } else {
+            setupNavigationBar(isPublishing: true)
+            delegate?.tappedPublish(topicTitle: title, topicBody: body, composeViewController: self)
+        }
+
     }
     
     @objc private func titleTextFieldChanged() {
         evaluatePublishButtonEnabledState()
     }
     
+    @objc private func titleTextFieldBeganEditing() {
+        updateSpacingForWarningToast()
+    }
+    
+    @objc private func tappedIPTemp() {
+        tappedIPTempButtonAction()
+    }
 }
 
 extension TalkPageTopicComposeViewController: UITextViewDelegate {
@@ -477,5 +609,8 @@ extension TalkPageTopicComposeViewController: UITextViewDelegate {
         return false
     }
 
+    func textViewDidBeginEditing(_ textView: UITextView) {
+        updateSpacingForWarningToast()
+    }
     
 }

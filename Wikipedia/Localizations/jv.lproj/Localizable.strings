@@ -85,7 +85,6 @@
 "button-next" = "Sabanjuré";
 "button-ok" = "YA";
 "button-publish" = "Babar";
-"button-read-now" = "Waca saiki";
 "button-report-a-bug" = "Lapuraké ama";
 "button-save-for-later" = "Simpen kanggo mengko";
 "button-saved-for-later" = "Kasimpen kanggo mengko";
@@ -238,7 +237,6 @@
 "main-menu-account-login" = "Mlebu log";
 "main-menu-account-logout" = "Metu log";
 "main-menu-account-logout-are-you-sure" = "Apa panjenengan yakin arep metu?";
-"main-menu-account-logout-cancel" = "Wurung";
 "main-menu-account-title-logged-in" = "Mlebu log minangka $1";
 "main-menu-heading-legal" = "Priangga lan Paugeran";
 "main-menu-nearby" = "Cedhak kéné";
@@ -247,7 +245,6 @@
 "main-menu-terms-of-use" = "Bebakuning Pangguna";
 "main-menu-title" = "Liyané";
 "main-menu-zero-faq" = "Pitakon Kerep Wikipédia Zéro";
-"menu-cancel-accessibility-label" = "Wurung";
 "navbar-title-mode-edit-wikitext-preview" = "Pratuduh";
 "nearby-distance-label-feet" = "$1 jangkah";
 "nearby-distance-label-km" = "$1 km";

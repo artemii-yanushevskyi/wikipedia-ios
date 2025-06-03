@@ -105,7 +105,6 @@
 "button-next" = "Sekva";
 "button-ok" = "Bone";
 "button-publish" = "Publikigi";
-"button-read-now" = "Legi nun";
 "button-report-a-bug" = "Raporti cimon";
 "button-save-for-later" = "Konservi por poste";
 "button-saved-for-later" = "Konservita por poste";
@@ -390,7 +389,6 @@
 "main-menu-account-login" = "Ensaluti";
 "main-menu-account-logout" = "Elsaluti";
 "main-menu-account-logout-are-you-sure" = "Ĉu vi certas, ke vi volas elsaluti?";
-"main-menu-account-logout-cancel" = "Nuligi";
 "main-menu-account-title-logged-in" = "Ensalutinta kiel $1";
 "main-menu-heading-legal" = "Privateco kaj uzkondiĉoj";
 "main-menu-nearby" = "Ĉirkaŭe";
@@ -399,7 +397,6 @@
 "main-menu-terms-of-use" = "Uzkondiĉoj";
 "main-menu-title" = "Pli";
 "main-menu-zero-faq" = "Oftaj demandoj pri Vikipedio Zero";
-"menu-cancel-accessibility-label" = "Nuligi";
 // Fuzzy
 "more-languages-tooltip-description" = "Serĉi tra Vikipedio en preskaŭ 300 lingvoj";
 "more-languages-tooltip-title" = "Aldoni lingvojn";

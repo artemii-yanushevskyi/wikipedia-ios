@@ -53,6 +53,10 @@ extension ArticleViewController {
     
     func showImage(in mediaList: MediaList, src: String, href: String, width: Int?, height: Int?) {
         let title = href.replacingOccurrences(of: "./", with: "", options: .anchored)
+        showImage(in: mediaList, title: title)
+    }
+    
+    func showImage(in mediaList: MediaList, title: String) {
         guard let index = mediaList.items.firstIndex(where: { $0.title == title }) else {
             showImage(in: mediaList, item: nil)
             return
@@ -97,6 +101,16 @@ extension ArticleViewController {
     }
 
     func getGalleryViewController(for item: MediaListItem?, in mediaList: MediaList) -> MediaListGalleryViewController {
-        return MediaListGalleryViewController(articleURL: articleURL, mediaList: mediaList, dataStore: dataStore, initialItem: item, theme: theme)
+        return MediaListGalleryViewController(articleURL: articleURL, mediaList: mediaList, dataStore: dataStore, initialItem: item, theme: theme, dismissDelegate: self)
+    }
+}
+
+extension ArticleViewController: WMFImageGalleryViewControllerDismissDelegate {
+    func galleryDidDismiss(_ gallery: WMFImageGalleryViewController) {
+
+    }
+    
+    func galleryDidTapInfoButton(_ gallery: WMFImageGalleryViewController) {
+
     }
 }

@@ -131,7 +131,7 @@ final class OnThisDayData {
                                           contentURL: URL(string: "https://en.wikipedia.org/wiki/Wikipedia:On_this_day/Today"),
                                           eventSnippet: eventSnippet,
                                           eventYear: eventYear,
-                                          eventYearsAgo: String(format: WMFLocalizedDateFormatStrings.yearsAgo(forWikiLanguage: language?.languageCode), locale: locale, (Calendar.current.component(.year, from: Date()) - 2001)),
+                                          eventYearsAgo: String(format: WMFLocalizedDateFormatStrings.yearsAgo(forWikiLanguage: language?.languageCode), locale: locale, (Calendar(identifier: .gregorian).component(.year, from: Date()) - 2001)),
                                           articleTitle: CommonStrings.plainWikipediaName(with: language?.languageCode),
                                           articleSnippet: articleSnippet,
                                           articleImage: UIImage(named: "W"),
@@ -262,7 +262,7 @@ extension OnThisDayEntry {
         articleSnippet = article.descriptionOrSnippet
         articleURL = article.articleURL
         let locale = NSLocale.wmf_locale(for: language)
-        let currentYear = Calendar.current.component(.year, from: Date())
+        let currentYear = Calendar(identifier: .gregorian).component(.year, from: Date())
         let yearsSinceEvent = currentYear - year
         eventYearsAgo = String(format: WMFLocalizedDateFormatStrings.yearsAgo(forWikiLanguage: language), locale: locale, yearsSinceEvent)
         yearRange = CommonStrings.onThisDayHeaderDateRangeMessage(with: language, locale: locale, lastEvent: earliestEventYear, firstEvent: latestEventYear)
@@ -277,7 +277,8 @@ extension OnThisDayEntry {
     }
 
     static func errorEntry(for error: OnThisDayData.ErrorType) -> OnThisDayEntry {
-        let isRTL = Locale.lineDirection(forLanguage: Locale.autoupdatingCurrent.languageCode ?? "en") == .rightToLeft
+        let languageCode = Locale.autoupdatingCurrent.language.languageCode?.identifier ?? "en"
+        let isRTL = Locale.Language(identifier: languageCode).lineLayoutDirection == .rightToLeft
         let destinationURL = URL(string: "wikipedia://explore")
         return OnThisDayEntry(isRTLLanguage: isRTL, error: error, onThisDayTitle: "", monthDay: "", fullDate: "", otherEventsText: "", contentURL: destinationURL, eventSnippet: nil, eventYear: "", eventYearsAgo: nil, articleTitle: nil, articleSnippet: nil, articleImage: nil, articleURL: nil, yearRange: "")
     }

@@ -56,10 +56,12 @@ open class WMFAlertManager: NSObject, RMessageProtocol, Themeable {
         })
     }
 
-    @objc func showWarningAlert(_ message: String, sticky:Bool,dismissPreviousAlerts:Bool, tapCallBack: (() -> Void)? = nil) {
+    @objc func showWarningAlert(_ message: String, duration: NSNumber? = nil, sticky:Bool,dismissPreviousAlerts:Bool, tapCallBack: (() -> Void)? = nil) {
+        
+        let finalDuration = duration?.intValue ?? 2
         
         showAlert(dismissPreviousAlerts, alertBlock: { () in
-            RMessage.showNotification(in: nil, title: message, subtitle: nil, iconImage: nil, type: .warning, customTypeName: nil, duration: sticky ? -1 : 2, callback: tapCallBack, buttonTitle: nil, buttonCallback: nil, at: .top, canBeDismissedByUser: true)
+            RMessage.showNotification(in: nil, title: message, subtitle: nil, iconImage: nil, type: .warning, customTypeName: nil, duration: sticky ? -1 : TimeInterval(finalDuration), callback: tapCallBack, buttonTitle: nil, buttonCallback: nil, at: .top, canBeDismissedByUser: true)
         })
     }
 
@@ -86,12 +88,41 @@ open class WMFAlertManager: NSObject, RMessageProtocol, Themeable {
         })
     }
     
-    func showBottomAlertWithMessage(_ message: String, subtitle: String?, image: UIImage?, type: RMessageType, customTypeName: String?, duration: TimeInterval? = nil, dismissPreviousAlerts:Bool, callback: (() -> Void)? = nil, buttonTitle: String? = nil, buttonCallBack: (() -> Void)? = nil) {
+    @objc func showBottomAlertWithMessage(_ message: String, subtitle: String?, buttonTitle: String?, image: UIImage?, dismissPreviousAlerts: Bool, tapCallBack: (() -> Void)? = nil) {
         showAlert(dismissPreviousAlerts, alertBlock: { () in
-            RMessage.showNotification(withTitle: message, subtitle: subtitle, iconImage: image, type: type, customTypeName: customTypeName, duration: duration ?? 5, callback: callback, buttonTitle: buttonTitle, buttonCallback: buttonCallBack, at: .bottom, canBeDismissedByUser: true)
+            RMessage.showNotification(in: nil, title: message, subtitle: subtitle, iconImage: image, type: .custom, customTypeName: "temporary-account", duration: 10, callback: tapCallBack, buttonTitle: buttonTitle, buttonCallback: tapCallBack, at: .bottom, canBeDismissedByUser: true)
         })
     }
     
+    @objc func showBottomWarningAlertWithMessage(_ message: String, subtitle: String?, buttonTitle: String?, image: UIImage?, dismissPreviousAlerts: Bool, tapCallBack: (() -> Void)? = nil) {
+        showAlert(dismissPreviousAlerts, alertBlock: { () in
+            RMessage.showNotification(in: nil, title: message, subtitle: subtitle, iconImage: image, type: .custom, customTypeName: "temporary-account-warning", duration: 10, callback: tapCallBack, buttonTitle: buttonTitle, buttonCallback: tapCallBack, at: .bottom, canBeDismissedByUser: true)
+        })
+    }
+
+    func showBottomAlertWithMessage(_ message: String, subtitle: String?, image: UIImage?, type: RMessageType, customTypeName: String?, duration: TimeInterval? = nil, dismissPreviousAlerts: Bool, callback: (() -> Void)? = nil, buttonTitle: String? = nil, buttonCallBack: (() -> Void)? = nil, completion: (() -> Void)? = nil
+    ) {
+        showAlert(dismissPreviousAlerts) {
+            RMessage.showNotification(
+                withTitle: message,
+                subtitle: subtitle,
+                iconImage: image,
+                type: type,
+                customTypeName: customTypeName,
+                duration: duration ?? 5,
+                callback: callback,
+                buttonTitle: buttonTitle,
+                buttonCallback: buttonCallBack,
+                at: .bottom,
+                canBeDismissedByUser: true
+            )
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + (duration ?? 5)) {
+                completion?()
+            }
+        }
+    }
+
     private var queuedAlertBlocks: [() -> Void] = []
 
     @objc func showAlert(_ dismissPreviousAlerts:Bool, alertBlock: @escaping () -> Void) {
@@ -152,6 +183,14 @@ open class WMFAlertManager: NSObject, RMessageProtocol, Themeable {
                 // no additional customization needed
             } else if messageView.customTypeName == "edit-published" {
                 messageView.titleTextColor = theme.colors.primaryText
+            } else if messageView.customTypeName == "feedback-submitted" {
+                messageView.titleTextColor = theme.colors.primaryText
+            } else if messageView.customTypeName == "temporary-account" {
+                messageView.titleTextColor = theme.colors.primaryText
+                messageView.imageViewTintColor = theme.colors.primaryText
+            } else if messageView.customTypeName == "temporary-account-warning" {
+                messageView.titleTextColor = theme.colors.primaryText
+                messageView.imageViewTintColor = theme.colors.warning
             }
         default:
             messageView.titleTextColor = theme.colors.link
@@ -159,5 +198,14 @@ open class WMFAlertManager: NSObject, RMessageProtocol, Themeable {
         
         messageView.layer.shadowColor = theme.colors.shadow.cgColor
     }
+}
 
+extension UIImage {
+    func resized(to size: CGSize) -> UIImage? {
+        UIGraphicsBeginImageContextWithOptions(size, false, self.scale)
+        self.draw(in: CGRect(origin: .zero, size: size))
+        let resizedImage = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        return resizedImage
+    }
 }

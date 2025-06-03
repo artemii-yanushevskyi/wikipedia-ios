@@ -4,15 +4,16 @@ import PassKit
 
 public struct WMFTheme: Equatable {
 
-	public let name: String
-	public let userInterfaceStyle: UIUserInterfaceStyle
-	public let keyboardAppearance: UIKeyboardAppearance
-    public let paymentButtonStyle: PKPaymentButtonStyle
+    public let name: String
+    public let userInterfaceStyle: UIUserInterfaceStyle
+    public let preferredStatusBarStyle: UIStatusBarStyle
+    public let keyboardAppearance: UIKeyboardAppearance
     public let text: UIColor
     public let secondaryText: UIColor
     public let link: UIColor
     public let accent: UIColor
     public let destructive: UIColor
+    public let warning: UIColor
     public let border: UIColor
     public let newBorder: UIColor
     public let paperBackground: UIColor
@@ -26,11 +27,14 @@ public struct WMFTheme: Equatable {
     public let inputAccessoryButtonSelectedTint: UIColor
     public let inputAccessoryButtonSelectedBackgroundColor: UIColor
     public let keyboardBarSearchFieldBackground: UIColor
-	public let diffCompareAccent: UIColor
+    public let diffCompareAccent: UIColor
     public let editorOrange: UIColor
+    public let softEditorOrange: UIColor
     public let editorPurple: UIColor
     public let editorGreen: UIColor
+    public let softEditorGreen: UIColor
     public let editorBlue: UIColor
+    public let softEditorBlue: UIColor
     public let editorGray: UIColor
     public let editorMatchForeground: UIColor
     public let editorMatchBackground: UIColor
@@ -38,21 +42,29 @@ public struct WMFTheme: Equatable {
     public let editorReplacedMatchBackground: UIColor
     public let editorButtonSelectedBackground: UIColor
     public let editorKeyboardShadow: UIColor
+    public let chromeBackground: UIColor
+    public let navigationBarTintColor: UIColor
+    public let darkBorder: UIColor
 
-	public var preferredColorScheme: ColorScheme {
-		return (self == WMFTheme.light || self == WMFTheme.sepia) ? .light : .dark
-	}
+    public var preferredColorScheme: ColorScheme {
+    return (self == WMFTheme.light || self == WMFTheme.sepia) ? .light : .dark
+    }
 
-	public static let light = WMFTheme(
+    public var applePayPaymentButtonStyle: PayWithApplePayButtonStyle {
+    return (self == WMFTheme.light || self == WMFTheme.sepia) ? .black : .white
+    }
+
+    public static let light = WMFTheme(
         name: "Light",
-		userInterfaceStyle: .light,
-		keyboardAppearance: .light,
-        paymentButtonStyle: .black,
+        userInterfaceStyle: .light,
+        preferredStatusBarStyle: .darkContent,
+        keyboardAppearance: .light,
         text: WMFColor.gray700,
         secondaryText: WMFColor.gray500,
         link: WMFColor.blue600,
         accent: WMFColor.green600,
         destructive: WMFColor.red600,
+        warning: WMFColor.orange600,
         border: WMFColor.gray400,
         newBorder: WMFColor.gray300,
         paperBackground: WMFColor.white,
@@ -66,30 +78,37 @@ public struct WMFTheme: Equatable {
         inputAccessoryButtonSelectedTint: WMFColor.gray700,
         inputAccessoryButtonSelectedBackgroundColor: WMFColor.gray200,
         keyboardBarSearchFieldBackground: WMFColor.gray200,
-		diffCompareAccent: WMFColor.orange600,
+        diffCompareAccent: WMFColor.orange600,
         editorOrange: WMFColor.orange600,
+        softEditorOrange: WMFColor.orange100alpha,
         editorPurple: WMFColor.purple600,
         editorGreen: WMFColor.green600,
+        softEditorGreen: WMFColor.green100alpha,
         editorBlue: WMFColor.blue600,
+        softEditorBlue: WMFColor.blue100alpha,
         editorGray: WMFColor.gray500,
         editorMatchForeground: .black,
         editorMatchBackground: WMFColor.lightMatchBackground,
         editorSelectedMatchBackground: WMFColor.yellow600,
         editorReplacedMatchBackground: WMFColor.matchReplacedBackground,
         editorButtonSelectedBackground: WMFColor.gray200,
-        editorKeyboardShadow: WMFColor.gray200
-	)
-    
+        editorKeyboardShadow: WMFColor.gray200,
+        chromeBackground: WMFColor.white,
+        navigationBarTintColor: WMFColor.blue600,
+        darkBorder: WMFColor.borderDark5
+    )
+
     public static let sepia = WMFTheme(
         name: "Sepia",
-		userInterfaceStyle: .light,
+        userInterfaceStyle: .light,
+        preferredStatusBarStyle: .darkContent,
         keyboardAppearance: .light,
-        paymentButtonStyle: .black,
         text: WMFColor.gray700,
         secondaryText: WMFColor.taupe600,
         link: WMFColor.blue600,
         accent: WMFColor.green600,
         destructive: WMFColor.red700,
+        warning: WMFColor.orange600,
         border: WMFColor.taupe200,
         newBorder: WMFColor.taupe200,
         paperBackground: WMFColor.beige100,
@@ -103,30 +122,37 @@ public struct WMFTheme: Equatable {
         inputAccessoryButtonSelectedTint: WMFColor.gray700,
         inputAccessoryButtonSelectedBackgroundColor: WMFColor.beige400,
         keyboardBarSearchFieldBackground: WMFColor.gray200,
-		diffCompareAccent: WMFColor.orange600,
+        diffCompareAccent: WMFColor.orange600,
         editorOrange: WMFColor.orange600,
+        softEditorOrange: WMFColor.orange100alpha,
         editorPurple: WMFColor.purple600,
         editorGreen: WMFColor.green600,
+        softEditorGreen: WMFColor.green100alpha,
         editorBlue: WMFColor.blue600,
+        softEditorBlue: WMFColor.blue100alpha,
         editorGray: WMFColor.taupe600,
         editorMatchForeground: .black,
         editorMatchBackground: WMFColor.lightMatchBackground,
         editorSelectedMatchBackground: WMFColor.yellow600,
         editorReplacedMatchBackground: WMFColor.matchReplacedBackground,
         editorButtonSelectedBackground: WMFColor.beige400,
-        editorKeyboardShadow: WMFColor.taupe200
+        editorKeyboardShadow: WMFColor.taupe200,
+        chromeBackground: WMFColor.beige100,
+        navigationBarTintColor: WMFColor.blue600,
+        darkBorder: WMFColor.borderDark5
     )
 
-	public static let dark = WMFTheme(
-		name: "Dark",
-		userInterfaceStyle: .dark,
-		keyboardAppearance: .dark,
-        paymentButtonStyle: .white,
+    public static let dark = WMFTheme(
+        name: "Dark",
+        userInterfaceStyle: .dark,
+        preferredStatusBarStyle: .lightContent,
+        keyboardAppearance: .dark,
         text: WMFColor.gray100,
         secondaryText: WMFColor.gray300,
         link: WMFColor.blue300,
         accent: WMFColor.green600,
         destructive: WMFColor.red600,
+        warning: WMFColor.yellow600,
         border: WMFColor.gray650,
         newBorder: WMFColor.gray500,
         paperBackground: WMFColor.gray675,
@@ -140,30 +166,37 @@ public struct WMFTheme: Equatable {
         inputAccessoryButtonSelectedTint: WMFColor.gray100,
         inputAccessoryButtonSelectedBackgroundColor: WMFColor.gray800,
         keyboardBarSearchFieldBackground: WMFColor.gray650,
-		diffCompareAccent: WMFColor.orange600,
+        diffCompareAccent: WMFColor.orange600,
         editorOrange: WMFColor.yellow600,
+        softEditorOrange: WMFColor.softorange15,
         editorPurple: WMFColor.red100,
         editorGreen: WMFColor.green600,
+        softEditorGreen: WMFColor.softgreen15,
         editorBlue: WMFColor.blue300,
+        softEditorBlue: WMFColor.softblue15,
         editorGray: WMFColor.gray300,
         editorMatchForeground: .black,
         editorMatchBackground: WMFColor.darkMatchBackground,
         editorSelectedMatchBackground: WMFColor.yellow600,
         editorReplacedMatchBackground: WMFColor.matchReplacedBackground,
         editorButtonSelectedBackground: WMFColor.gray600,
-        editorKeyboardShadow: WMFColor.gray800
-	)
+        editorKeyboardShadow: WMFColor.gray800,
+        chromeBackground: WMFColor.gray650,
+        navigationBarTintColor: WMFColor.blue300,
+        darkBorder: WMFColor.borderDark0
+    )
 
-	public static let black = WMFTheme(
-		name: "Black",
-		userInterfaceStyle: .dark,
-		keyboardAppearance: .dark,
-        paymentButtonStyle: .white,
+    public static let black = WMFTheme(
+        name: "Black",
+        userInterfaceStyle: .dark,
+        preferredStatusBarStyle: .lightContent,
+        keyboardAppearance: .dark,
         text: WMFColor.gray100,
         secondaryText: WMFColor.gray300,
         link: WMFColor.blue300,
         accent: WMFColor.green600,
         destructive: WMFColor.red600,
+        warning: WMFColor.yellow600,
         border: WMFColor.gray675,
         newBorder: WMFColor.gray500,
         paperBackground: WMFColor.black,
@@ -177,18 +210,24 @@ public struct WMFTheme: Equatable {
         inputAccessoryButtonSelectedTint: WMFColor.gray100,
         inputAccessoryButtonSelectedBackgroundColor: WMFColor.gray800,
         keyboardBarSearchFieldBackground: WMFColor.gray650,
-		diffCompareAccent: WMFColor.orange600,
+        diffCompareAccent: WMFColor.orange600,
         editorOrange: WMFColor.yellow600,
+        softEditorOrange: WMFColor.orange600alpha,
         editorPurple: WMFColor.red100,
         editorGreen: WMFColor.green600,
+        softEditorGreen: WMFColor.green600alpha,
         editorBlue: WMFColor.blue300,
+        softEditorBlue: WMFColor.blue600alpha,
         editorGray: WMFColor.gray300,
         editorMatchForeground: .black,
         editorMatchBackground: WMFColor.darkMatchBackground,
         editorSelectedMatchBackground: WMFColor.yellow600,
         editorReplacedMatchBackground: WMFColor.matchReplacedBackground,
         editorButtonSelectedBackground: WMFColor.gray600,
-        editorKeyboardShadow: WMFColor.gray700
-	)
+        editorKeyboardShadow: WMFColor.gray700,
+        chromeBackground: WMFColor.gray650,
+        navigationBarTintColor: WMFColor.blue300,
+        darkBorder: WMFColor.borderDark0
+    )
 
 }

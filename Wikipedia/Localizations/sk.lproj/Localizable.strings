@@ -10,6 +10,7 @@
 // Author: Mhurd
 // Author: Mikulas1
 // Author: Nemo bis
+// Author: Oujon
 // Author: Patriccck
 // Author: Patrik L.
 // Author: Rudko
@@ -18,40 +19,6 @@
 // Author: Tsevener
 // Author: Yardom78
 
-"aaald-added-text-description-2" = "pridané $1";
-"aaald-article-description-updated-description" = "Aktualizovaný popis článku";
-"aaald-article-insert-header" = "Významné aktualizácie";
-"aaald-article-insert-last-updated" = "Naposledy aktualizované";
-"aaald-article-insert-new-changes" = "Nové zmeny";
-"aaald-article-insert-read-more" = "Zobraziť viac aktualizácií";
-"aaald-characters-text-description" = "{{PLURAL:$1|0=znakov|znak|znaky}}";
-"aaald-deleted-text-description-2" = "$1 vymazané";
-"aaald-error-subitle" = "Skúste znovu obnovením stránky";
-"aaald-error-title" = "Nedá sa načítať história článku";
-"aaald-many-sections-description" = "v $1 sekciách";
-"aaald-multiple-changes-description" = "Urobených viacero zmien";
-"aaald-multiple-references-added-description" = "Pridaných viacero referencií";
-"aaald-new-book-reference-title" = "Kniha";
-"aaald-new-discussion" = "Nová diskusia";
-"aaald-new-journal-reference-database" = "cez $1";
-"aaald-new-journal-reference-title" = "Časopis";
-"aaald-new-journal-reference-volume" = "Zväzok $1:";
-"aaald-new-news-reference-retrieved-date" = "Načítané $1";
-"aaald-new-news-reference-title" = "Novinky";
-"aaald-new-talk-topic-description-format" = "$1 o tomto článku";
-"aaald-new-website-reference-archive-date-text" = "z originálu dňa $1";
-"aaald-new-website-reference-archive-url-text" = "Archive.org URL";
-"aaald-new-website-reference-title" = "Webová stránka";
-"aaald-numerical-multiple-references-added-description" = "{{PLURAL:$1|0=pridaných 0 referencií|pridaná $1 referencia|pridané referencie $1}}";
-"aaald-one-section-description" = "v sekcii $1";
-"aaald-revision-by-anonymous" = "Úprava anonymným používateľom";
-"aaald-revision-userInfo" = "Upravil/a $1 (počet úprav $2)";
-"aaald-single-reference-added-description" = "Pridaná referencia";
-"aaald-small-change-description" = "{{PLURAL:$1|0=Nebola urobená žiadna malá zmena|Urobená $1 malá zmena|Urobených malých zmien $1 }}";
-"aaald-summary-title" = "{{PLURAL:$1|0=0 zmien|$1 zmena|zmeny $1}}  {{PLURAL:$2|0=0 redaktorov|$2 redaktor|redaktorov $2}} počas {{PLURAL:$3|0=0 dní|$3 dňa|$3 dní}}";
-"aaald-two-sections-description" = "v sekciách $1 a $2";
-"aaald-vandalism-revert-description" = "Vrátené späť kvôli podozreniu z vandalizmu";
-"aaald-view-full-history-button" = "Zobraziť úplnú históriu článku";
 "about-content-license" = "Licencia obsahu";
 "about-content-license-details" = "Pokiaľ nie je uvedené inak, je obsah dostupný v rámci licencie $1.";
 "about-content-license-details-share-alike-license" = "Creative Commons Attribution-ShareAlike License";
@@ -88,6 +55,7 @@
 "account-creation-saving" = "Ukladanie...";
 "account-creation-title" = "Vytvoriť nový účet";
 "account-group-title" = "Váš účet";
+"account-request-vanishing" = "Zmiznúť účet";
 "account-talk-page-title" = "Vaša diskusná stránka";
 "account-talk-preferences-auto-sign-discussions" = "Automaticky podpisovať nové diskusné príspevky";
 "account-talk-preferences-auto-sign-discussions-setting-explanation" = "V diskusných príspevkoch sa bude používať podpis určený v Nastaveniach podpisu";
@@ -96,8 +64,10 @@
 "action-add-to-reading-list" = "Pridať do zoznamu na prečítanie";
 "action-add-to-reading-list-short" = "Pridať do zoznamu";
 "action-cancel" = "Zrušiť";
+"action-discard-edit" = "Zahodiť úpravy";
 "action-discard-edits" = "Zahodiť úpravy";
 "action-find-in-page" = "Nájsť na stránke";
+"action-keep-editing" = "Pokračujte v úpravách";
 "action-language-accessibility" = "Zmeniť jazyk";
 "action-move-to" = "Presunúť do…";
 "action-move-to-reading-list" = "Presunúť do zoznamu na prečítanie";
@@ -144,15 +114,18 @@
 "article-languages-yours" = "Vaše jazyky";
 "article-read-more-title" = "Čítať viac";
 "article-reference-view-title" = "Referencia $1";
+"article-revision-history" = "Dejiny revízií článku";
 "article-save-error-not-enough-space" = "Na vašom zariadení nemáte dostatok miesta na uloženie tohto článku";
 "article-share" = "Zdieľať";
+"article-talk-page" = "Článok rozhovory";
 "article-toolbar-reading-themes-controls-toolbar-item" = "Ovládače čítacích tém";
 "back-button-accessibility-label" = "Späť";
 "back-button-popover-title" = "Ťuknite pre návrat";
+"button-go-back" = "Choď späť";
 "button-next" = "Ďalej";
 "button-ok" = "OK";
 "button-publish" = "Uverejniť";
-"button-read-now" = "Čítať";
+"button-publish-anyway" = "Napriek tomu publikovať";
 "button-report-a-bug" = "Nahlásiť chybu";
 "button-save-for-later" = "Uložiť na neskôr";
 "button-saved-for-later" = "Uložené na neskôr";
@@ -163,8 +136,11 @@
 "chinese-variants-alert-body" = "Wikipédia teraz podporuje aj tieto čínske varianty ako primárny a sekundárny jazyk aplikácie:\n\n简体 Chinese, Simplified (zh-hans)\n香港繁體 Hong Kong Traditional (zh-hk)\n澳門繁體 Macau Traditional (zh-mo)\n大马简体 Malaysia Simplified (zh-my)\n新加坡简体 Singapore Simplified (zh-sg)\n臺灣正體 Taiwanese Traditional (zh-tw)";
 "chinese-variants-alert-title" = "Aktualizácie podpory čínskych variánt";
 "clear-title-accessibility-label" = "Vyčistiť";
+"clearing-cache-complete" = "Úplné vyčištenie cache.";
+"clearing-cache-in-progress" = "Čistenie cache sa deje.";
 "close-button-accessibility-label" = "Zavrieť";
 "compass-direction" = "na $1. hodine";
+"continue-button-title" = "Pokračovať";
 "continue-reading-empty-description" = "Prehľadávať ďalšie články na Wikipédii";
 "continue-reading-empty-title" = "Žiadne nedávno čítané články";
 "crimean-tatar-variants-alert-body" = "Wikipédia teraz podporuje aj nasledovnú varianty jazyka krimských tatárov ako primárny aj sekundárny jazyk aplikácie:\n\nQırımtatarca, Latin Crimean Tatar Latin (chr-latn)\nкъырымтатарджа, Кирил Crimean Tatar Cyrillic (crh-cyrl)";
@@ -205,14 +181,26 @@
 "description-welcome-descriptions-title" = "Popis článkov";
 "description-welcome-promise-title" = "Sľubujem, že nezneužijem túto funkciu.";
 "description-welcome-start-editing-button" = "Začať editovať";
-// Fuzzy
-"diff-compare-header-from-info-heading" = "Od:";
+"developer-settings" = "Nastavenia vývojára";
+"developer-settings-send-analytics-to-wmflabs" = "Pošlite analytické údaje do wmflabs.";
+"developer-settings-suppress-image-rec-post" = "Neuverejňujte úpravu odporúčaní obrázkov.";
+"diff-article-revision-history" = "Dejiny revízií článku";
+"diff-change-added" = "Pridanie, $1, pridanie koniec.";
+"diff-change-paragraph-lines-moved-down" = "Odsek bol posunutý nadol {{PLURAL:$1| 0=0 riadkov| $1 riadok| $1 riadkov}}. Prejdite na nové miesto.";
+"diff-change-paragraph-lines-moved-up" = "Odsek sa posunul nahor {{PLURAL:$1| 0=0 riadkov| $1 riadok| $1 riadkov}}. Prejdite na nové miesto.";
+"diff-change-paragraph-moved" = "Odstavec sa presunul. Choďte na predchádzajúcu polohu.";
+"diff-change-removal" = "Odstránenie, $1 , koniec odstránenia.";
+"diff-compare-header-from-info-heading" = "Predošlá úprava";
 "diff-compare-header-heading" = "Porovnať revízie";
-// Fuzzy
-"diff-compare-header-to-info-heading" = "Komu:";
+"diff-compare-header-to-info-heading" = "Zobrazená úprava";
 "diff-compare-title" = "Porovnať revízie";
+"diff-content-added" = "Pridaný obsah, $1";
+"diff-content-removed" = "Obsah odstránený, $1";
+"diff-context-cell-collapse-section" = "Zbaliť $1";
+"diff-context-cell-expand-section" = "Rozbaliť $1";
 "diff-context-lines-collapsed-button-title" = "Zobraziť";
 "diff-context-lines-expanded-button-title" = "Skryť";
+"diff-header-revision-accessibility-text" = "Revízia vykonaná v";
 "diff-multi-line-format" = "Riadky $1 - $2";
 "diff-paragraph-moved" = "Odsek presunutý";
 "diff-paragraph-moved-direction-down" = "nižšie";
@@ -221,6 +209,10 @@
 "diff-paragraph-moved-distance-section" = "{{PLURAL:$1|$1 sekcia|$1 sekcie|$1 sekcií}}";
 "diff-paragraph-moved-format" = "Odsek presunutý $1 $2";
 "diff-revision-error-title" = "Nepodarilo sa načítať revíziu";
+"diff-rollback" = "vrátiť";
+"diff-rollback-alert-message" = "Naozaj chcete vrátiť úpravy späť?";
+"diff-rollback-alert-title" = "Vrátiť späť úpravy";
+"diff-rollback-success" = "Úpravy boli vrátené.";
 "diff-single-header-editor-number-edits-format" = "{{PLURAL:$1|$1 úprava|$1 úpravy|$1 úprav}}";
 "diff-single-header-editor-title" = "Informácie o redaktorovi";
 "diff-single-header-subtitle-bytes-added" = "{{PLURAL:$1|Pridaný $1 bajt|Pridané $1 bajty|Pridaných $1 bajtov}}";
@@ -255,8 +247,7 @@
 "edit-summary-choice-fixed-typos" = "Oprava preklepu";
 "edit-summary-choice-linked-words" = "Pridanie odkazov";
 "edit-summary-placeholder-text" = "Ako ste vylepšili článok?";
-// Fuzzy
-"edit-watch-list-learn-more-text" = "Viac informácií o sledovaných stránkach";
+"edit-watch-list-learn-more-text" = "Zistite viac o svojom zozname sledovaných";
 "edit-watch-this-page-text" = "Sledovať túto stránku";
 "editing-welcome-be-bold-subtitle" = "Buďte smelí, no nie bezohľadní pri aktualizácii článkov. Nerobte si starosti s menšími chybami: každá predchádzajúca verzia stránky je uložená, takže chyby môžu byť ľahko napravené našou komunitou.";
 "editing-welcome-be-bold-title" = "Váš hlas je dôležitý";
@@ -494,7 +485,6 @@
 "main-menu-account-logout" = "Odhlásiť sa";
 "main-menu-account-logout-are-you-sure" = "Ste si istý, že sa chcete odhlásiť?";
 "main-menu-account-logout-are-you-sure-message" = "Odhlásenie sa vymaže vaše lokálne uložené údaje (oznámenia a správy), ale vaše údaje o účte budú stále dostupné na webe a budú sa dať znovu stiahnuť ak sa znovu prihlásite.";
-"main-menu-account-logout-cancel" = "Zrušiť";
 "main-menu-account-title-logged-in" = "Prihlásený ako $1";
 "main-menu-heading-legal" = "Ochrana osobných údajov a podmienky používania";
 "main-menu-nearby" = "V okolí";
@@ -503,7 +493,6 @@
 "main-menu-terms-of-use" = "Podmienky používania";
 "main-menu-title" = "Viac";
 "main-menu-zero-faq" = "Wikipédia Zero FAQ";
-"menu-cancel-accessibility-label" = "Zrušiť";
 "more-languages-tooltip-description" = "Vyhľadávajte vo viac ako 300 jazykoch";
 "more-languages-tooltip-title" = "Pridať jazyky";
 "move-articles-to-reading-list" = "Pridať {{PLURAL:$1|$1 článok|$1 články|$1 článkov}} do zoznamu na prečítanie";
@@ -550,7 +539,6 @@
 "notifications-center-go-to-article" = "Článok";
 "notifications-center-go-to-article-talk-format" = "diskusná stránka $1";
 "notifications-center-go-to-diff" = "Rozdiely";
-"notifications-center-go-to-talk-page" = "Diskusná stránka";
 "notifications-center-go-to-user-page" = "Stránka používateľa $1";
 "notifications-center-go-to-wikidata-item" = "Položka Wikidáta";
 "notifications-center-go-to-your-talk-page" = "Vaša diskusná stránka";
@@ -657,7 +645,7 @@
 "on-this-day-sub-title-for-date-from-language-wikipedia" = "$1 z Wikipédie v jazyku $2";
 "on-this-day-title" = "Dnes";
 "original-tab-button-popover-description" = "Ťuknutím na W sa vrátite na kartu, z ktorej ste začali";
-"page-history-anonymous-edits" = "úpravy anonymných používateľov";
+// Fuzzy
 "page-history-bot-edits" = "úpravy botov";
 "page-history-compare-accessibility-hint" = "Ťuknite pre vybratie dvoch revízií na porovnanie";
 "page-history-compare-title" = "Porovnať";
@@ -672,7 +660,6 @@
 "page-history-revision-time-accessibility-label" = "úprava vykonaná $1";
 "page-history-revisions-comparison-warning" = "Vybrané môžu byť len dve revízie";
 "page-history-stats-text" = "{{PLURAL:$1|$1 úprava|$1 úpravy|$1 úprav}} od $2";
-"page-history-user-edits" = "úpravy používateľa";
 "page-issues" = "Nedostatky stránky";
 "page-location" = "Zobraziť na mape";
 "page-protected-can-not-edit" = "Nemáte právo upraviť túto stránku";
@@ -927,8 +914,7 @@
 "talk-page-new-banner-title" = "Buďte milí";
 "talk-page-new-reply-success-text" = "Vaša odpoveď bola úspešne zverejnená";
 "talk-page-new-topic-success-text" = "Vaša diskusia bola úspešne zverejnená";
-// Fuzzy
-"talk-page-title-article-talk" = "Diskusia k článku";
+"talk-page-title-article-talk" = "Článok Diskusia";
 "talk-page-title-user-talk" = "Diskusia s redaktorom";
 "theme-black-display-name" = "Čierna";
 "theme-dark-display-name" = "Tmavá";

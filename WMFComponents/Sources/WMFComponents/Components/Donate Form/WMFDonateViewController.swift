@@ -1,33 +1,20 @@
 import Foundation
+import UIKit
 
-@objc public protocol WMFDonateLoggingDelegate: AnyObject {
-    func logDonateFormDidAppear()
-    func logDonateFormUserDidTriggerError(error: Error)
-    func logDonateFormUserDidTapAmountPresetButton()
-    func logDonateFormUserDidEnterAmountInTextfield()
-    func logDonateFormUserDidTapApplePayButton(transactionFeeIsSelected: Bool, recurringMonthlyIsSelected: Bool, emailOptInIsSelected: NSNumber?)
-    func logDonateFormUserDidAuthorizeApplePayPaymentSheet(amount: Decimal, presetIsSelected: Bool, recurringMonthlyIsSelected: Bool, donorEmail: String?, metricsID: String?)
-    func logDonateFormUserDidTapProblemsDonatingLink()
-    func logDonateFormUserDidTapOtherWaysToGiveLink()
-    func logDonateFormUserDidTapFAQLink()
-    func logDonateFormUserDidTapTaxInfoLink()
-}
-
-public final class WMFDonateViewController: WMFCanvasViewController {
+public final class WMFDonateViewController: WMFCanvasViewController, WMFNavigationBarConfiguring {
     
     // MARK: - Properties
 
     fileprivate let hostingViewController: WMFDonateHostingViewController
     private let viewModel: WMFDonateViewModel
-    private weak var loggingDelegate: WMFDonateLoggingDelegate?
     
     // MARK: - Lifecycle
     
-    public init(viewModel: WMFDonateViewModel, delegate: WMFDonateDelegate?, loggingDelegate: WMFDonateLoggingDelegate?) {
+    public init(viewModel: WMFDonateViewModel) {
         self.viewModel = viewModel
-        self.hostingViewController = WMFDonateHostingViewController(viewModel: viewModel, delegate: delegate, loggingDelegate: loggingDelegate)
-        self.loggingDelegate = loggingDelegate
+        self.hostingViewController = WMFDonateHostingViewController(viewModel: viewModel)
         super.init()
+        hidesBottomBarWhenPushed = true
     }
     
     required init?(coder: NSCoder) {
@@ -38,30 +25,36 @@ public final class WMFDonateViewController: WMFCanvasViewController {
         super.viewDidLoad()
         self.title = viewModel.localizedStrings.title
         addComponent(hostingViewController, pinToEdges: true)
+        
+        configureNavigationBar()
     }
     
-    public override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
+    private func configureNavigationBar() {
         
-        navigationController?.setNavigationBarHidden(false, animated: false)
+        let titleConfig = WMFNavigationBarTitleConfig(title: viewModel.localizedStrings.title, customView: nil, alignment: .centerCompact)
+        var closeConfig: WMFNavigationBarCloseButtonConfig? = nil
+        
+        if navigationController?.viewControllers.first === self {
+            closeConfig = WMFNavigationBarCloseButtonConfig(text: viewModel.localizedStrings.cancelTitle, target: self, action: #selector(closeButtonTapped(_:)), alignment: .leading)
+        }
+        
+        configureNavigationBar(titleConfig: titleConfig, closeButtonConfig: closeConfig, profileButtonConfig: nil, tabsButtonConfig: nil, searchBarConfig: nil, hideNavigationBarOnScroll: false)
+    }
+    
+    @objc func closeButtonTapped(_ sender: UIButton) {
+        dismiss(animated: true)
     }
     
     public override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        loggingDelegate?.logDonateFormDidAppear()
-    }
-    
-    public override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        
-        self.navigationController?.setNavigationBarHidden(true, animated: false)
+        viewModel.loggingDelegate?.handleDonateLoggingAction(.nativeFormDidAppear)
     }
 }
 
 fileprivate final class WMFDonateHostingViewController: WMFComponentHostingController<WMFDonateView> {
 
-    init(viewModel: WMFDonateViewModel, delegate: WMFDonateDelegate?, loggingDelegate: WMFDonateLoggingDelegate?) {
-        super.init(rootView: WMFDonateView(viewModel: viewModel, delegate: delegate))
+    init(viewModel: WMFDonateViewModel) {
+        super.init(rootView: WMFDonateView(viewModel: viewModel))
     }
 
     required init?(coder aDecoder: NSCoder) {

@@ -1,39 +1,75 @@
 import WMF
+import SwiftUI
 import CocoaLumberjackSwift
 import WMFComponents
 import WMFData
 
-class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewControllerDelegate, UISearchBarDelegate, CollectionViewUpdaterDelegate, ImageScaleTransitionProviding, DetailTransitionSourceProviding, MEPEventsProviding {
+class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewControllerDelegate, CollectionViewUpdaterDelegate, ImageScaleTransitionProviding, DetailTransitionSourceProviding, MEPEventsProviding, WMFNavigationBarConfiguring, WMFNavigationBarHiding {
 
     public var presentedContentGroupKey: String?
     public var shouldRestoreScrollPosition = false
 
     @objc public weak var notificationsCenterPresentationDelegate: NotificationsCenterPresentationDelegate?
-    @objc public weak var settingsPresentationDelegate: SettingsPresentationDelegate?
-    
+
     private weak var imageRecommendationsViewModel: WMFImageRecommendationsViewModel?
 
-    // MARK: - UIViewController
+    private var yirDataController: WMFYearInReviewDataController? {
+        return try? WMFYearInReviewDataController()
+    }
+
+    private var _tabsCoordinator: TabsOverviewCoordinator?
+    private var tabsCoordinator: TabsOverviewCoordinator? {
+        guard let navigationController else { return nil }
+        _tabsCoordinator = TabsOverviewCoordinator(navigationController: navigationController, theme: theme, dataStore: dataStore)
+        return _tabsCoordinator
+    }
     
+    // Coordinator
+    private var _profileCoordinator: ProfileCoordinator?
+    private var profileCoordinator: ProfileCoordinator? {
+        guard let navigationController = navigationController,
+        let yirCoordinator = self.yirCoordinator else {
+            return nil
+        }
+        
+        guard let existingProfileCoordinator = _profileCoordinator else {
+            _profileCoordinator = ProfileCoordinator(navigationController: navigationController, theme: theme, dataStore: dataStore, donateSouce: .exploreProfile, logoutDelegate: self, sourcePage: ProfileCoordinatorSource.explore, yirCoordinator: yirCoordinator)
+            _profileCoordinator?.badgeDelegate = self
+            return _profileCoordinator
+        }
+
+        return existingProfileCoordinator
+    }
+
+    private var _yirCoordinator: YearInReviewCoordinator?
+    private var yirCoordinator: YearInReviewCoordinator? {
+            guard let navigationController = navigationController,
+            let yirDataController else {
+                return nil
+            }
+            
+            guard let existingYirCoordinator = _yirCoordinator else {
+                _yirCoordinator = YearInReviewCoordinator(navigationController: navigationController, theme: theme, dataStore: dataStore, dataController: yirDataController)
+                _yirCoordinator?.badgeDelegate = self
+                return _yirCoordinator
+            }
+            
+            return existingYirCoordinator
+    }
+    
+    var topSafeAreaOverlayHeightConstraint: NSLayoutConstraint?
+    var topSafeAreaOverlayView: UIView?
+    
+    private var presentingSearchResults: Bool = false
+
+    // MARK: - Lifecycle
+
     override func viewDidLoad() {
         super.viewDidLoad()
         layoutManager.register(ExploreCardCollectionViewCell.self, forCellWithReuseIdentifier: ExploreCardCollectionViewCell.identifier, addPlaceholder: true)
 
-        navigationItem.titleView = titleView
-        navigationBar.addUnderNavigationBarView(searchBarContainerView)
-        navigationBar.isUnderBarViewHidingEnabled = true
-        navigationBar.displayType = dataStore.authenticationManager.isLoggedIn ? .centeredLargeTitle : .largeTitle
-        navigationBar.shouldTransformUnderBarViewWithBar = true
-        navigationBar.isShadowHidingEnabled = true
-
-        updateNotificationsCenterButton()
-        updateSettingsButton()
-        updateNavigationBarVisibility()
-
         isRefreshControlEnabled = true
         collectionView.refreshControl?.layer.zPosition = 0
-
-        title = CommonStrings.exploreTabTitle
 
         NotificationCenter.default.addObserver(self, selector: #selector(exploreFeedPreferencesDidSave(_:)), name: NSNotification.Name.WMFExploreFeedPreferencesDidSave, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(articleDidChange(_:)), name: NSNotification.Name.WMFArticleUpdated, object: nil)
@@ -42,8 +78,11 @@ class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewCo
         NotificationCenter.default.addObserver(self, selector: #selector(viewContextDidReset(_:)), name: NSNotification.Name.WMFViewContextDidReset, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(databaseHousekeeperDidComplete), name: .databaseHousekeeperDidComplete, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(applicationDidBecomeActive), name: UIApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(coreDataStoreSetup), name: WMFNSNotification.coreDataStoreSetup, object: nil)
+        
+        setupTopSafeAreaOverlay(scrollView: collectionView)
     }
-    
+
     @objc var isGranularUpdatingEnabled: Bool = true {
         didSet {
             collectionViewUpdater?.isGranularUpdatingEnabled = isGranularUpdatingEnabled
@@ -54,7 +93,7 @@ class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewCo
         NotificationCenter.default.removeObserver(self)
         NSObject.cancelPreviousPerformRequests(withTarget: self)
     }
-    
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         startMonitoringReachabilityIfNeeded()
@@ -66,63 +105,70 @@ class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewCo
 #if UITEST
         presentUITestHelperController()
 #endif
-        if !UIAccessibility.isVoiceOverRunning {
-            presentImageRecommendationsFeatureAnnouncementIfNeeded()
-        }
-        
+        presentModalsIfNeeded()
+
         if tabBarSnapshotImage == nil {
-            updateTabBarSnapshotImage()
+            if #available(iOS 18, *), UIDevice.current.userInterfaceIdiom == .pad {
+                tabBarSnapshotImage = nil
+            } else {
+                updateTabBarSnapshotImage()
+            }
+        }
+        if WMFArticleTabsDataController.shared.shouldShowArticleTabs {
+            ArticleTabsFunnel.shared.logIconImpression(interface: .feed, project: nil)
         }
     }
-    
+
     override func viewWillHaveFirstAppearance(_ animated: Bool) {
         super.viewWillHaveFirstAppearance(animated)
         setupFetchedResultsController()
     }
-    
+
     override func viewWillAppear(_ animated: Bool) {
-        navigationController?.setNavigationBarHidden(true, animated: false)
         
         super.viewWillAppear(animated)
         isGranularUpdatingEnabled = true
         restoreScrollPositionIfNeeded()
-
-        // Terrible hack to make back button text appropriate for iOS 14 - need to set the title on `WMFAppViewController`. For all app tabs, this is set in `viewWillAppear`.
-        (parent as? WMFAppViewController)?.navigationItem.backButtonTitle = title
+        configureNavigationBar()
     }
-    
+
     override func viewWillTransition(to size: CGSize, with coordinator: any UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
-        
+
         coordinator.animate(alongsideTransition: nil) { [weak self] _ in
             self?.updateTabBarSnapshotImage()
+            self?.calculateTopSafeAreaOverlayHeight()
         }
     }
 
-    func presentUITestHelperController() {
-        let viewController = UITestHelperViewController(theme: theme)
-        present(viewController, animated: false)
-    }
-
-    private func restoreScrollPositionIfNeeded() {
-        guard
-            shouldRestoreScrollPosition,
-            let presentedContentGroupKey = presentedContentGroupKey,
-            let contentGroup = fetchedResultsController?.fetchedObjects?.first(where: { $0.key == presentedContentGroupKey }),
-            let indexPath = fetchedResultsController?.indexPath(forObject: contentGroup)
-        else {
-            return
-        }
-        collectionView.scrollToItem(at: indexPath, at: [], animated: false)
-        self.shouldRestoreScrollPosition = false
-        self.presentedContentGroupKey = nil
-    }
-    
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         dataStore.feedContentController.dismissCollapsedContentGroups()
         stopMonitoringReachability()
         isGranularUpdatingEnabled = false
+        resetNavBarAppearance()
+    }
+    
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        
+        if #available(iOS 18, *) {
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                if previousTraitCollection?.horizontalSizeClass != traitCollection.horizontalSizeClass {
+                    configureNavigationBar()
+                }
+            }
+        }
+    }
+    
+    open override func refresh() {
+        updateFeedSources(with: nil, userInitiated: true) {
+        }
+    }
+    
+    private func presentUITestHelperController() {
+        let viewController = UITestHelperViewController(theme: theme)
+        present(viewController, animated: false)
     }
     
     @objc private func databaseHousekeeperDidComplete() {
@@ -130,36 +176,73 @@ class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewCo
             self.refresh()
         }
     }
-
-    @objc func updateNotificationsCenterButton() {
-        if self.dataStore.authenticationManager.isLoggedIn {
-            let numberOfUnreadNotifications = try? dataStore.remoteNotificationsController.numberOfUnreadNotifications()
-            let hasUnreadNotifications = numberOfUnreadNotifications?.intValue ?? 0 != 0
-            let bellImage = BarButtonImageStyle.notificationsButtonImage(theme: theme, indicated: hasUnreadNotifications)
-            let notificationsBarButton = UIBarButtonItem(image: bellImage, style: .plain, target: self, action: #selector(userDidTapNotificationsCenter))
-            notificationsBarButton.accessibilityLabel = hasUnreadNotifications ? CommonStrings.notificationsCenterBadgeTitle : CommonStrings.notificationsCenterTitle
-            navigationItem.leftBarButtonItem = notificationsBarButton
-            navigationBar.displayType = .centeredLargeTitle
-        } else {
-            navigationItem.leftBarButtonItem = nil
-            navigationBar.displayType = .largeTitle
-        }
-        navigationBar.updateNavigationItems()
-    }
-
-    @objc public func updateNavigationBarVisibility() {
-        navigationBar.isBarHidingEnabled = UIAccessibility.isVoiceOverRunning ? false : true
-    }
     
-    func updateSettingsButton() {
+    // MARK: Navigation Bar
+    
+    private func configureNavigationBar() {
         
-        let settingsBarButtonItem = UIBarButtonItem(image: BarButtonImageStyle.settingsButtonImage(theme: theme), style: .plain, target: self, action: #selector(userDidTapSettings))
-        settingsBarButtonItem.accessibilityLabel = CommonStrings.settingsTitle
-        navigationItem.rightBarButtonItem = settingsBarButtonItem
-        navigationBar.updateNavigationItems()
+        var titleConfig: WMFNavigationBarTitleConfig = WMFNavigationBarTitleConfig(title: CommonStrings.exploreTabTitle, customView: titleView, alignment: .leadingCompact)
+        extendedLayoutIncludesOpaqueBars = false
+        if #available(iOS 18, *) {
+            if UIDevice.current.userInterfaceIdiom == .pad && traitCollection.horizontalSizeClass == .regular {
+
+                var customLargeTitleFont: UIFont? = nil
+                if let logoFont = UIFont(name: "icomoon", size: 24) {
+                    customLargeTitleFont = logoFont
+                    titleConfig = WMFNavigationBarTitleConfig(title: "", customView: nil, alignment: .leadingLarge, customLargeTitleFont: customLargeTitleFont)
+                } else {
+                    titleConfig = WMFNavigationBarTitleConfig(title: CommonStrings.exploreTabTitle, customView: nil, alignment: .hidden, customLargeTitleFont: nil)
+                }
+                
+                extendedLayoutIncludesOpaqueBars = true
+            }
+        }
+        
+        let profileButtonConfig = profileButtonConfig(target: self, action: #selector(userDidTapProfile), dataStore: dataStore, yirDataController: yirDataController,  leadingBarButtonItem: nil)
+        
+        let tabsButtonConfig = tabsButtonConfig(target: self, action: #selector(userDidTapTabs), dataStore: dataStore)
+        
+        let searchViewController = SearchViewController(source: .topOfFeed, customArticleCoordinatorNavigationController: navigationController)
+        searchViewController.dataStore = dataStore
+        
+        let populateSearchBarWithTextAction: (String) -> Void = { [weak self] searchTerm in
+            self?.navigationItem.searchController?.searchBar.text = searchTerm
+            self?.navigationItem.searchController?.searchBar.becomeFirstResponder()
+        }
+        
+        searchViewController.populateSearchBarWithTextAction = populateSearchBarWithTextAction
+        
+        searchViewController.theme = theme
+        
+        let searchConfig = WMFNavigationBarSearchConfig(
+            searchResultsController: searchViewController,
+            searchControllerDelegate: self,
+            searchResultsUpdater: self,
+            searchBarDelegate: nil,
+            searchBarPlaceholder: WMFLocalizedString("search-field-placeholder-text", value: "Search Wikipedia", comment: "Search field placeholder text"),
+            showsScopeBar: false, scopeButtonTitles: nil)
+        
+
+        configureNavigationBar(titleConfig: titleConfig, closeButtonConfig: nil, profileButtonConfig: profileButtonConfig, tabsButtonConfig: tabsButtonConfig, searchBarConfig: searchConfig, hideNavigationBarOnScroll: !presentingSearchResults)
+        
+        // Need to override this so that "" does not appear as back button title.
+        navigationItem.backButtonTitle = CommonStrings.exploreTabTitle
     }
     
-    // MARK: - NavBar
+    @objc func updateProfileButton() {
+        let config = self.profileButtonConfig(target: self, action: #selector(userDidTapProfile), dataStore: dataStore, yirDataController: yirDataController, leadingBarButtonItem: nil)
+        updateNavigationBarProfileButton(needsBadge: config.needsBadge, needsBadgeLabel: CommonStrings.profileButtonBadgeTitle, noBadgeLabel: CommonStrings.profileButtonTitle)
+    }
+    
+    @objc func userDidTapTabs() {
+        _ = tabsCoordinator?.start()
+        ArticleTabsFunnel.shared.logIconClick(interface: .feed, project: nil)
+    }
+    
+    @objc func scrollToTop() {
+        navigationController?.setNavigationBarHidden(false, animated: true)
+        collectionView.setContentOffset(CGPoint(x: collectionView.contentOffset.x, y: 0 - collectionView.contentInset.top), animated: true)
+    }
     
     @objc func titleBarButtonPressed(_ sender: UIButton?) {
         scrollToTop()
@@ -187,23 +270,40 @@ class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewCo
         return titleView
     }()
 
-    @objc func userDidTapSettings() {
-        DonateFunnel.shared.logSettingsDidTapSettingsIcon()
-     
-        settingsPresentationDelegate?.userDidTapSettings(from: self)
-
-    }
-    
-    open override func refresh() {
-        updateFeedSources(with: nil, userInitiated: true) {
+    @objc func userDidTapProfile() {
+        
+        guard let languageCode = dataStore.languageLinkController.appLanguage?.languageCode,
+        let metricsID = DonateCoordinator.metricsID(for: .exploreProfile, languageCode: languageCode) else {
+            return
         }
+        
+        DonateFunnel.shared.logExploreProfile(metricsID: metricsID)
+
+        profileCoordinator?.start()
     }
     
     // MARK: - Scroll
     
+    private func restoreScrollPositionIfNeeded() {
+        guard
+            shouldRestoreScrollPosition,
+            let presentedContentGroupKey = presentedContentGroupKey,
+            let contentGroup = fetchedResultsController?.fetchedObjects?.first(where: { $0.key == presentedContentGroupKey }),
+            let indexPath = fetchedResultsController?.indexPath(forObject: contentGroup)
+        else {
+            return
+        }
+        collectionView.scrollToItem(at: indexPath, at: [], animated: false)
+        self.shouldRestoreScrollPosition = false
+        self.presentedContentGroupKey = nil
+    }
+    
     var isLoadingOlderContent: Bool = false
     override func scrollViewDidScroll(_ scrollView: UIScrollView) {
         super.scrollViewDidScroll(scrollView)
+        
+        calculateNavigationBarHiddenState(scrollView: scrollView)
+        
         guard !isLoadingOlderContent else {
             return
         }
@@ -251,6 +351,10 @@ class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewCo
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         logFeedImpressionAfterDelay()
     }
+    
+    func scrollViewDidScrollToTop(_ scrollView: UIScrollView) {
+        navigationController?.setNavigationBarHidden(false, animated: true)
+    }
 
     // MARK: - Event logging
 
@@ -264,7 +368,8 @@ class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewCo
             guard let group = group(at: indexPath), group.undoType == .none, let itemFrame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else {
                 continue
             }
-            let visibleRectOrigin = CGPoint(x: collectionView.contentOffset.x, y: collectionView.contentOffset.y + navigationBar.visibleHeight)
+            let navBarVisibleHeight = CGFloat(0)
+            let visibleRectOrigin = CGPoint(x: collectionView.contentOffset.x, y: collectionView.contentOffset.y + navBarVisibleHeight)
             let visibleRectSize = view.layoutMarginsGuide.layoutFrame.size
             let itemCenter = CGPoint(x: itemFrame.midX, y: itemFrame.midY)
             let visibleRect = CGRect(origin: visibleRectOrigin, size: visibleRectSize)
@@ -276,63 +381,9 @@ class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewCo
     }
     
     // MARK: - Search
-
-    public var wantsCustomSearchTransition: Bool {
-        return true
-    }
-    
-    lazy var searchBarContainerView: UIView = {
-        let searchContainerView = UIView()
-        searchBar.translatesAutoresizingMaskIntoConstraints = false
-        searchContainerView.addSubview(searchBar)
-        let leading = searchContainerView.layoutMarginsGuide.leadingAnchor.constraint(equalTo: searchBar.leadingAnchor)
-        let trailing = searchContainerView.layoutMarginsGuide.trailingAnchor.constraint(equalTo: searchBar.trailingAnchor)
-        let top = searchContainerView.topAnchor.constraint(equalTo: searchBar.topAnchor)
-        let bottom = searchContainerView.bottomAnchor.constraint(equalTo: searchBar.bottomAnchor)
-        searchContainerView.addConstraints([leading, trailing, top, bottom])
-        return searchContainerView
-    }()
-
-    private var _scribbleIgnoringDelegate: Any? = nil
-    
-    private var scribbleIgnoringDelegate: ScribbleIgnoringInteractionDelegate? {
-        if _scribbleIgnoringDelegate == nil {
-            _scribbleIgnoringDelegate = ScribbleIgnoringInteractionDelegate()
-        }
-        return _scribbleIgnoringDelegate as? ScribbleIgnoringInteractionDelegate
-    }
-
-    lazy var searchBar: UISearchBar = {
-        let searchBar = UISearchBar()
-        searchBar.delegate = self
-        searchBar.returnKeyType = .search
-        searchBar.searchBarStyle = .minimal
-        searchBar.placeholder =  WMFLocalizedString("search-field-placeholder-text", value: "Search Wikipedia", comment: "Search field placeholder text")
-
-        // Disable Scribble on this placeholder text field
-        if UIDevice.current.userInterfaceIdiom == .pad,
-        let scribbleIgnoringDelegate = scribbleIgnoringDelegate {
-            let existingInteractions = searchBar.searchTextField.interactions
-            existingInteractions.forEach { searchBar.searchTextField.removeInteraction($0) }
-            let scribbleIgnoringInteraction = UIScribbleInteraction(delegate: scribbleIgnoringDelegate)
-            searchBar.searchTextField.addInteraction(scribbleIgnoringInteraction)
-        }
-
-        return searchBar
-    }()
     
     @objc func ensureWikipediaSearchIsShowing() {
-        if self.navigationBar.underBarViewPercentHidden > 0 {
-            self.navigationBar.setNavigationBarPercentHidden(0, underBarViewPercentHidden: 0, extendedViewPercentHidden: 0, topSpacingPercentHidden: 1, animated: true)
-        }
-    }
-
-    // MARK: - UISearchBarDelegate
-    
-    func searchBarShouldBeginEditing(_ searchBar: UISearchBar) -> Bool {
-        let searchActivity = NSUserActivity.wmf_searchView()
-        NotificationCenter.default.post(name: .WMFNavigateToActivity, object: searchActivity)
-        return false
+        navigationController?.setNavigationBarHidden(false, animated: true)
     }
     
     // MARK: - State
@@ -567,17 +618,29 @@ class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewCo
         // When a random article title is tapped, show the previewed article, not another random article
         let useRandomArticlePreviewItem = titleAreaTapped && group.moreType == .pageWithRandomButton
 
-        if !useRandomArticlePreviewItem, let vc = group.detailViewControllerWithDataStore(dataStore, theme: theme, imageRecDelegate: self, imageRecLoggingDelegate: self) {
+        if !useRandomArticlePreviewItem {
             
-            if vc is WMFImageRecommendationsViewController {
-                ImageRecommendationsFunnel.shared.logExploreCardDidTapAddImage()
+            // first try random coordinator
+            if let navigationController,
+               group.contentGroupKind == .random,
+               let randomSiteURL = group.siteURL {
+                
+                // let articleSource = Explore tapped "Another random article" title
+                let randomCoordinator = RandomArticleCoordinator(navigationController: navigationController, articleURL: nil, siteURL: randomSiteURL, dataStore: dataStore, theme: theme, source: .undefined, animated: true)
+                randomCoordinator.start()
+                return
+            } else if let vc = group.detailViewControllerWithDataStore(dataStore, theme: theme, imageRecDelegate: self, imageRecLoggingDelegate: self) {
+                
+                if vc is WMFImageRecommendationsViewController {
+                    ImageRecommendationsFunnel.shared.logExploreCardDidTapAddImage()
+                }
+                
+                push(vc, animated: true)
+                return
             }
-            
-            push(vc, animated: true)
-            return
         }
         
-        if let vc = group.detailViewControllerForPreviewItemAtIndex(0, dataStore: dataStore, theme: theme) {
+        if let vc = group.detailViewControllerForPreviewItemAtIndex(0, dataStore: dataStore, theme: theme, source: .undefined) {
             if vc is WMFImageGalleryViewController {
                 present(vc, animated: true)
             } else {
@@ -634,11 +697,8 @@ class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewCo
         }
 
         self.theme = theme
-        updateNotificationsCenterButton()
-        updateSettingsButton()
+        tabBarSnapshotImage = nil
 
-        searchBar.apply(theme: theme)
-        searchBarContainerView.backgroundColor = theme.colors.paperBackground
         collectionView.backgroundColor = .clear
         view.backgroundColor = theme.colors.paperBackground
         for cell in collectionView.visibleCells {
@@ -653,6 +713,20 @@ class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewCo
             }
             themeable.apply(theme: theme)
         }
+        
+        yirCoordinator?.theme = theme
+        profileCoordinator?.theme = theme
+        
+        updateProfileButton()
+        themeNavigationBarLeadingTitleView()
+        themeNavigationBarCustomCenteredTitleView()
+        
+        if let searchVC = navigationItem.searchController?.searchResultsController as? SearchViewController {
+            searchVC.theme = theme
+            searchVC.apply(theme: theme)
+        }
+        
+        themeTopSafeAreaOverlay()
     }
     
     // MARK: - ColumnarCollectionViewLayoutDelegate
@@ -702,9 +776,8 @@ class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewCo
     // MARK: - ExploreCardViewControllerDelegate
     
     func exploreCardViewController(_ exploreCardViewController: ExploreCardViewController, didSelectItemAtIndexPath indexPath: IndexPath) {
-        guard
-            let contentGroup = exploreCardViewController.contentGroup,
-            let vc = contentGroup.detailViewControllerForPreviewItemAtIndex(indexPath.row, dataStore: dataStore, theme: theme, imageRecDelegate: self, imageRecLoggingDelegate: self) else {
+        
+        guard let contentGroup = exploreCardViewController.contentGroup else {
             return
         }
         
@@ -715,6 +788,18 @@ class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewCo
             } else {
                 imageScaleTransitionView = nil
             }
+        }
+        
+        // First try pushing articles via coordinators
+        let successWithCoordinators = pushArticlesViaCoordinators(contentGroup: contentGroup, indexPath: indexPath)
+        
+        if successWithCoordinators {
+            return
+        }
+        
+        // If that didn't work (probably not pushing to an article), fall back to legacy logic
+        guard let vc = contentGroup.detailViewControllerForPreviewItemAtIndex(indexPath.row, dataStore: dataStore, theme: theme, source: .undefined, imageRecDelegate: self, imageRecLoggingDelegate: self) else {
+            return
         }
     
         if let otdvc = vc as? OnThisDayViewController {
@@ -732,6 +817,47 @@ class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewCo
         default:
             push(vc, animated: true)
         }
+    }
+    
+    private func pushArticlesViaCoordinators(contentGroup: WMFContentGroup, indexPath: IndexPath) -> Bool {
+        // First try pushing articles via coordinators
+        if let navigationController,
+           let articleURL = contentGroup.previewArticleURLForItemAtIndex(indexPath.row) {
+            switch contentGroup.detailType {
+            case .page:
+                let articleSource = ArticleSource.undefined
+                // todo: we may want to switch to get article source if we want to be more specific:
+                switch contentGroup.contentGroupKind {
+                case .featuredArticle:
+                    // articleSource = explore featured article cell, etc.
+                    break
+                default:
+                    break
+                }
+                
+                let articleCoordinator = ArticleCoordinator(navigationController: navigationController, articleURL: articleURL, dataStore: dataStore, theme: theme, source: articleSource)
+                articleCoordinator.start()
+                return true
+            case .pageWithRandomButton:
+                let articleSource = ArticleSource.undefined
+                // todo: we may want to switch to get article source if we want to be more specific:
+                switch contentGroup.contentGroupKind {
+                case .random:
+                    // articleSource = explore random article, etc.
+                    break
+                default:
+                    break
+                }
+                
+                let randomArticleCoordinator = RandomArticleCoordinator(navigationController: navigationController, articleURL: articleURL, siteURL: nil, dataStore: dataStore, theme: theme, source: articleSource, animated: true)
+                randomArticleCoordinator.start()
+                return true
+            default:
+                break
+            }
+        }
+        
+        return false
     }
     
     // MARK: - Prefetching
@@ -803,17 +929,33 @@ class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewCo
     // MARK: - For NestedCollectionViewContextMenuDelegate
     private var previewed: (context: WMFContentGroup?, indexPathItem: Int?)
 
-    func contextMenu(with contentGroup: WMFContentGroup? = nil, for articleURL: URL? = nil, at itemIndex: Int) -> UIContextMenuConfiguration? {
-        guard let contentGroup = contentGroup, let vc = viewController(for: contentGroup, at: itemIndex) else {
+    func contextMenu(contentGroup: WMFContentGroup? = nil, articleURL: URL? = nil, article: WMFArticle? = nil, itemIndex: Int) -> UIContextMenuConfiguration? {
+        guard let contentGroup = contentGroup else {
             return nil
+        }
+        
+        var previewVC: UIViewController? = viewController(for: contentGroup, at: itemIndex)
+        
+        if let articleURL,
+           let article {
+            switch contentGroup.detailType {
+            case .page:
+                 previewVC = ArticlePeekPreviewViewController(articleURL: articleURL, article: article, dataStore: dataStore, theme: theme, articlePreviewingDelegate: self)
+
+            case .pageWithRandomButton:
+                previewVC = ArticlePeekPreviewViewController(articleURL: articleURL, article: article, dataStore: dataStore, theme: theme, articlePreviewingDelegate: self, needsRandomOnPush: true)
+                
+            default:
+                break
+            }
         }
 
         let previewProvider: () -> UIViewController? = {
-            return vc
+            return previewVC
         }
         return UIContextMenuConfiguration(identifier: nil, previewProvider: previewProvider) { (suggestedActions) -> UIMenu? in
-            if let articleVC = vc as? ArticleViewController {
-                return UIMenu(title: "", image: nil, identifier: nil, options: [], children: articleVC.contextMenuItems)
+            if let previewVC = previewVC as? ArticlePeekPreviewViewController {
+                return UIMenu(title: "", image: nil, identifier: nil, options: [], children: previewVC.contextMenuItems)
             } else {
                 return nil
             }
@@ -823,17 +965,11 @@ class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewCo
     func viewController(for contentGroup: WMFContentGroup, at itemIndex: Int) -> UIViewController? {
         previewed.context = contentGroup
 
-        if let viewControllerToCommit = contentGroup.detailViewControllerForPreviewItemAtIndex(itemIndex, dataStore: dataStore, theme: theme) {
+        if let viewControllerToCommit = contentGroup.detailViewControllerForPreviewItemAtIndex(itemIndex, dataStore: dataStore, theme: theme, source: .undefined) {
             if let potd = viewControllerToCommit as? WMFImageGalleryViewController {
                 potd.setOverlayViewTopBarHidden(true)
-            } else if let avc = viewControllerToCommit as? ArticleViewController {
-                avc.articlePreviewingDelegate = self
-                avc.wmf_addPeekableChildViewController(for: avc.articleURL, dataStore: dataStore, theme: theme)
             } else if let otdVC = viewControllerToCommit as? OnThisDayViewController {
                 otdVC.initialEvent = (contentGroup.contentPreview as? [Any])?[itemIndex] as? WMFFeedOnThisDayEvent
-                otdVC.navigationMode = .bar
-            } else if let newsVC = viewControllerToCommit as? NewsViewController {
-                newsVC.navigationMode = .bar
             }
 
             previewed.indexPathItem = itemIndex
@@ -859,27 +995,36 @@ class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewCo
             if let potd = viewControllerToCommit as? WMFImageGalleryViewController {
                 potd.setOverlayViewTopBarHidden(false)
                 self.present(potd, animated: false)
-            } else if let avc = viewControllerToCommit as? ArticleViewController {
-                avc.wmf_removePeekableChildViewControllers()
-                self.push(avc, animated: false)
-            } else if let otdVC = viewControllerToCommit as? OnThisDayViewController {
-                otdVC.navigationMode = .detail
-                self.push(viewControllerToCommit, animated: true)
-            } else if let newsVC = viewControllerToCommit as? NewsViewController {
-                newsVC.navigationMode = .detail
-                self.push(viewControllerToCommit, animated: true)
+            } else if let peekVC = viewControllerToCommit as? ArticlePeekPreviewViewController {
+                if let navVC = navigationController {
+                    if peekVC.needsRandomOnPush {
+                        let coordinator = RandomArticleCoordinator(navigationController: navVC, articleURL: peekVC.articleURL, siteURL: nil, dataStore: dataStore, theme: theme, source: .undefined, animated: true)
+                        coordinator.start()
+                    } else {
+                        let coordinator = ArticleCoordinator(navigationController: navVC, articleURL: peekVC.articleURL, dataStore: dataStore, theme: theme, source: .undefined)
+                        coordinator.start()
+                    }
+                }
+                
             } else {
                 self.push(viewControllerToCommit, animated: true)
             }
         }
     }
 
-    override func readMoreArticlePreviewActionSelected(with articleController: ArticleViewController) {
-        articleController.wmf_removePeekableChildViewControllers()
-        push(articleController, animated: true)
+    override func readMoreArticlePreviewActionSelected(with peekController: ArticlePeekPreviewViewController) {
+        guard let navVC = navigationController else { return }
+        if peekController.needsRandomOnPush {
+            let coordinator = RandomArticleCoordinator(navigationController: navVC, articleURL: peekController.articleURL, siteURL: nil, dataStore: dataStore, theme: theme, source: .undefined, animated: true)
+            coordinator.start()
+        } else {
+            let coordinator = ArticleCoordinator(navigationController: navVC, articleURL: peekController.articleURL, dataStore: dataStore, theme: theme, source: .undefined)
+            coordinator.start()
+        }
+        
     }
 
-    override func saveArticlePreviewActionSelected(with articleController: ArticleViewController, didSave: Bool, articleURL: URL) {
+    override func saveArticlePreviewActionSelected(with peekController: ArticlePeekPreviewViewController, didSave: Bool, articleURL: URL) {
         if let date = previewed.context?.midnightUTCDate {
             if didSave {
                 ReadingListsFunnel.shared.logSaveInFeed(label: previewed.context?.getAnalyticsLabel(), measureAge: date, articleURL: articleURL, index: previewed.indexPathItem)
@@ -890,82 +1035,75 @@ class ExploreViewController: ColumnarCollectionViewController, ExploreCardViewCo
     }
 
     var addArticlesToReadingListVCDidDisappear: (() -> Void)? = nil
-    
-    // TODO: - Remove after expiry date (4 Oct, 2024)
-    private func presentImageRecommendationsFeatureAnnouncementIfNeeded() {
-        
-        guard ImageRecommendationsFeatureAnnouncementTimeBox.isAnnouncementActive() else {
-            return
-        }
-        
-        guard let fetchedResultsController,
-            let groups = fetchedResultsController.fetchedObjects else {
-            return
-        }
-        
-        let suggestedEditsCardObjects = groups.filter { $0.contentGroupKindInteger == WMFContentGroupKind.suggestedEdits.rawValue}
-        guard let suggestedEditsCardObject = suggestedEditsCardObjects.first else {
-            return
-        }
-        
-        guard presentedViewController == nil else {
-            return
-        }
-        
-        guard self.isViewLoaded && self.view.window != nil else {
-            return
-        }
-        
-        let imageRecommendationsDataController = WMFImageRecommendationsDataController()
-        guard !imageRecommendationsDataController.hasPresentedFeatureAnnouncementModal else {
-            return
-        }
-        
-        guard let indexPath = fetchedResultsController.indexPath(forObject: suggestedEditsCardObject) else {
-            return
-        }
-        
-        guard let cell = collectionView.cellForItem(at: indexPath),
-        let sourceRect = cell.superview?.convert(cell.frame, to: view) else {
-            return
-        }
-        
-        let viewModel = WMFFeatureAnnouncementViewModel(title: WMFLocalizedString("image-rec-feature-announce-title", value: "Try 'Add an image'", comment: "Title of image recommendations feature announcement modal. Displayed the first time a user lands on the Explore feed after the feature has been added (if eligible)."), body: WMFLocalizedString("image-rec-feature-announce-body", value: "Decide if an image gets added to a Wikipedia article. You can find the ‘Add an image’ card in your ‘Explore feed’.", comment: "Body of image recommendations feature announcement modal. Displayed the first time a user lands on the Explore feed after the feature has been added (if eligible)."), primaryButtonTitle: CommonStrings.tryNowTitle, image:  WMFIcon.addPhoto, primaryButtonAction: { [weak self] in
-            
-            guard let self,
-                  let imageRecommendationViewController = WMFImageRecommendationsViewController.imageRecommendationsViewController(dataStore: self.dataStore, imageRecDelegate: self, imageRecLoggingDelegate: self) else {
-                return
-            }
-            
-            navigationController?.pushViewController(imageRecommendationViewController, animated: true)
-            
-            ImageRecommendationsFunnel.shared.logExploreDidTapFeatureAnnouncementPrimaryButton()
-            
-        })
-        
-        announceFeature(viewModel: viewModel, sourceView:view, sourceRect:sourceRect)
-
-       imageRecommendationsDataController.hasPresentedFeatureAnnouncementModal = true
-    }
 }
 
-// MARK: - Image Recommendations Announcement Time-box
-// TODO: - Remove after expiry date (4 Oct, 2024)
-struct ImageRecommendationsFeatureAnnouncementTimeBox {
-    static let expiryDate: Date? = {
-        var expiryDateComponents = DateComponents()
-        expiryDateComponents.year = 2024
-        expiryDateComponents.month = 10
-        expiryDateComponents.day = 4
-        return Calendar.current.date(from: expiryDateComponents)
-    }()
+// MARK: - Modal Presentation Logic
+
+extension ExploreViewController {
     
-    static func isAnnouncementActive() -> Bool {
-        guard let expiryDate else {
+    /// Catch-all method for deciding what is the best modal to present on top of Explore at this point. This method needs careful if-else logic so that we do not present two modals at the same time, which may unexpectedly suppress one.
+    fileprivate func presentModalsIfNeeded() {
+        
+        if needsYearInReviewAnnouncement() {
+            updateProfileButton()
+            presentYearInReviewAnnouncement()
+        }
+    }
+    
+    private func needsYearInReviewAnnouncement() -> Bool {
+        if UIDevice.current.userInterfaceIdiom == .pad && (navigationController?.navigationBar.isHidden ?? false) {
             return false
         }
-        let currentDate = Date()
-        return currentDate <= expiryDate
+        
+        guard let yirDataController,
+              let appLanguage = dataStore.languageLinkController.appLanguage else {
+                  return false
+        }
+        
+        let project = WMFProject.wikipedia(WMFLanguage(languageCode: appLanguage.languageCode, languageVariantCode: appLanguage.languageVariantCode))
+        
+        guard yirDataController.shouldShowYearInReviewFeatureAnnouncement(primaryAppLanguageProject: project) else {
+            return false
+        }
+
+        guard presentedViewController == nil else {
+            return false
+        }
+
+        guard self.isViewLoaded && self.view.window != nil else {
+            return false
+        }
+        
+        return true
+    }
+
+    // TODO: Remove after expiry date (1 March 2025)
+    private func presentYearInReviewAnnouncement() {
+        guard let yirDataController = try? WMFYearInReviewDataController() else {
+            return
+        }
+
+        let title = dataStore.authenticationManager.authStateIsPermanent ?  CommonStrings.exploreYIRTitlePersonalized : CommonStrings.exploreYiRTitle
+        let body = dataStore.authenticationManager.authStateIsPermanent ? CommonStrings.yirFeatureAnnoucementBodyPersonalized : CommonStrings.yirFeatureAnnoucementBody
+        let primaryButtonTitle = CommonStrings.continueButton
+        let image = UIImage(named: "wikipedia-globe")
+        let backgroundImage = UIImage(named: "Announcement")
+        let gifName = dataStore.authenticationManager.authStateIsPermanent ? "personal-slide-00" : "english-slide-00"
+        let altText = dataStore.authenticationManager.authStateIsPermanent ? CommonStrings.personalizedExploreAccessibilityLabel : CommonStrings.collectiveExploreAccessibilityLabel
+
+        let viewModel = WMFFeatureAnnouncementViewModel(title: title, body: body, primaryButtonTitle: primaryButtonTitle, image: image, backgroundImage: backgroundImage, gifName: gifName, altText: altText, primaryButtonAction: { [weak self] in
+            guard let self else { return }
+            yirCoordinator?.start()
+            DonateFunnel.shared.logYearInReviewFeatureAnnouncementDidTapContinue(isEntryA: !dataStore.authenticationManager.authStateIsPermanent)
+        }, closeButtonAction: {
+            DonateFunnel.shared.logYearInReviewFeatureAnnouncementDidTapClose(isEntryA: !self.dataStore.authenticationManager.authStateIsPermanent)
+        })
+
+        if let profileBarButtonItem = navigationItem.rightBarButtonItem {
+            announceFeature(viewModel: viewModel, sourceView: nil, sourceRect: nil, barButtonItem: profileBarButtonItem)
+            DonateFunnel.shared.logYearInReviewFeatureAnnouncementDidAppear(isEntryA: !dataStore.authenticationManager.authStateIsPermanent)
+            yirDataController.hasPresentedYiRFeatureAnnouncementModel = true
+        }
     }
 }
 
@@ -1017,8 +1155,7 @@ extension ExploreViewController: SaveButtonsControllerDelegate {
     func showAddArticlesToReadingListViewController(for article: WMFArticle) {
         let addArticlesToReadingListViewController = AddArticlesToReadingListViewController(with: dataStore, articles: [article], moveFromReadingList: nil, theme: theme)
         addArticlesToReadingListViewController.delegate = self
-        let navigationController = WMFThemeableNavigationController(rootViewController: addArticlesToReadingListViewController, theme: self.theme)
-        navigationController.isNavigationBarHidden = true
+        let navigationController = WMFComponentNavigationController(rootViewController: addArticlesToReadingListViewController, modalPresentationStyle: .overFullScreen)
         present(navigationController, animated: true)
     }
 
@@ -1146,8 +1283,7 @@ extension ExploreViewController: ExploreCardCollectionViewCellDelegate {
             exploreFeedSettingsViewController.showCloseButton = true
             exploreFeedSettingsViewController.dataStore = self.dataStore
             exploreFeedSettingsViewController.apply(theme: self.theme)
-            let themeableNavigationController = WMFThemeableNavigationController(rootViewController: exploreFeedSettingsViewController, theme: self.theme)
-            themeableNavigationController.modalPresentationStyle = .formSheet
+            let themeableNavigationController = WMFComponentNavigationController(rootViewController: exploreFeedSettingsViewController, modalPresentationStyle: .formSheet)
             self.present(themeableNavigationController, animated: true)
         }
         
@@ -1215,11 +1351,13 @@ extension ExploreViewController {
     @objc func pushNotificationBannerDidDisplayInForeground(_ notification: Notification) {
         dataStore.remoteNotificationsController.loadNotifications(force: true)
     }
-
+    
     @objc func applicationDidBecomeActive() {
-        if !UIAccessibility.isVoiceOverRunning {
-            presentImageRecommendationsFeatureAnnouncementIfNeeded()
-        }
+        presentModalsIfNeeded()
+    }
+    
+    @objc func coreDataStoreSetup() {
+        configureNavigationBar()
     }
 }
 
@@ -1235,25 +1373,25 @@ extension ExploreViewController: WMFImageRecommendationsDelegate {
         let item = MediaListItem(title: "File:\(data.filename)", sectionID: 0, type: .image, showInGallery: true, isLeadImage: false, sources: nil)
         let mediaList = MediaList(items: [item])
 
-        let gallery = MediaListGalleryViewController(articleURL: articleURL, mediaList: mediaList, dataStore: dataStore, initialItem: item, theme: theme)
+        let gallery = MediaListGalleryViewController(articleURL: articleURL, mediaList: mediaList, dataStore: dataStore, initialItem: item, theme: theme, dismissDelegate: nil)
         presentingVC.present(gallery, animated: true)
     }
 
     func imageRecommendationsUserDidTapViewArticle(project: WMFData.WMFProject, title: String) {
         
-        guard let siteURL = project.siteURL,
-              let articleURL = siteURL.wmf_URL(withTitle: title),
-              let articleViewController = ArticleViewController(articleURL: articleURL, dataStore: dataStore, theme: theme) else {
+        guard let navigationController,
+              let siteURL = project.siteURL,
+              let articleURL = siteURL.wmf_URL(withTitle: title) else {
             return
         }
         
-        navigationController?.pushViewController(articleViewController, animated: true)
+        let coordinator = ArticleCoordinator(navigationController: navigationController, articleURL: articleURL, dataStore: dataStore, theme: theme, source: .undefined)
+        coordinator.start()
     }
     
     func imageRecommendationsUserDidTapImageLink(commonsURL: URL) {
         navigate(to: commonsURL, useSafari: false)
         ImageRecommendationsFunnel.shared.logCommonsWebViewDidAppear()
-        navigationController?.setNavigationBarHidden(true, animated: false)
     }
 
     func imageRecommendationsUserDidTapInsertImage(viewModel: WMFImageRecommendationsViewModel, title: String, with imageData: WMFImageRecommendationsViewModel.WMFImageRecommendationData) {
@@ -1283,84 +1421,6 @@ extension ExploreViewController: WMFImageRecommendationsDelegate {
     func imageRecommendationsDidTriggerTimeWarning() {
         let warningmessage = WMFLocalizedString("image-recs-time-warning-message", value: "Please review the article to understand its topic and inspect the image", comment: "Message displayed in a warning when a user taps yes to an image recommendation within 5 seconds or less")
         WMFAlertManager.sharedInstance.showBottomAlertWithMessage(warningmessage, subtitle: nil, image: nil, type: .normal, customTypeName: nil, dismissPreviousAlerts: true)
-    }
-    
-    func imageRecommendationDidTriggerAltTextExperimentPanel(isFlowB: Bool, imageRecommendationsViewController: WMFImageRecommendationsViewController) {
-        guard let viewModel = imageRecommendationsViewModel,
-              let lastRecommendation = viewModel.lastRecommendation else {
-            return
-        }
-        
-        guard let imageWikitext = lastRecommendation.imageWikitext,
-              let fullArticleWikitextWithImage = lastRecommendation.fullArticleWikitextWithImage,
-            let lastRevisionID = lastRecommendation.lastRevisionID,
-            let localizedFileTitle = lastRecommendation.localizedFileTitle else {
-            return
-        }
-
-        let primaryTapHandler: ScrollableEducationPanelButtonTapHandler = { [weak self] _, _ in
-            imageRecommendationsViewController.dismiss(animated: true) { [weak self] in
-                
-                guard let self else {
-                    return
-                }
-                
-                let addAltTextTitle = WMFLocalizedString("alt-text-experiment-view-title", value: "Add alt text", comment: "Title text for alt text experiment view")
-                let languageCode = viewModel.project.languageCode
-                let editSummary = WMFLocalizedString("alt-text-experiment-edit-summary", languageCode: languageCode, value: "Added alt text", comment: "Automatic edit summary added to edit after user publishes an edit through the alt-text experiment.")
-                
-                let localizedStrings = WMFAltTextExperimentViewModel.LocalizedStrings(articleNavigationBarTitle: addAltTextTitle, editSummary: editSummary)
-                
-                let articleTitle = lastRecommendation.imageData.pageTitle
-                
-                let altTextViewModel = WMFAltTextExperimentViewModel(localizedStrings: localizedStrings, articleTitle: articleTitle, caption: lastRecommendation.caption, imageFullURL: lastRecommendation.imageData.fullUrl, imageThumbURL: lastRecommendation.imageData.thumbUrl, filename: localizedFileTitle, imageWikitext: imageWikitext, fullArticleWikitextWithImage: fullArticleWikitextWithImage, lastRevisionID: lastRevisionID, sectionID: 0, isFlowB: true)
-                
-                let textViewPlaceholder = WMFLocalizedString("alt-text-experiment-text-field-placholder", value: "Describe the image", comment: "Text used for the text field placholder on the alt text view")
-                let sheetLocalizedStrings = WMFAltTextExperimentModalSheetViewModel.LocalizedStrings(title: addAltTextTitle, buttonTitle: CommonStrings.nextTitle, textViewPlaceholder: textViewPlaceholder)
-
-                let bottomSheetViewModel = WMFAltTextExperimentModalSheetViewModel(altTextViewModel: altTextViewModel, localizedStrings: sheetLocalizedStrings)
-                
-                lastRecommendation.altTextExperimentAcceptDate = Date()
-                
-                EditInteractionFunnel.shared.logAltTextPromptDidTapAdd(project: WikimediaProject(wmfProject: viewModel.project))
-
-                if let siteURL = viewModel.project.siteURL,
-                   let articleURL = siteURL.wmf_URL(withTitle: articleTitle),
-                   let articleViewController = ArticleViewController(articleURL: articleURL, dataStore: self.dataStore, theme: self.theme, altTextExperimentViewModel: altTextViewModel, needsAltTextExperimentSheet: true, altTextBottomSheetViewModel: bottomSheetViewModel, altTextDelegate: self) {
-
-                    self.navigationController?.pushViewController(articleViewController, animated: true)
-                }
-            }
-        }
-
-        let secondaryTapHandler: ScrollableEducationPanelButtonTapHandler = { _, _ in
-            imageRecommendationsViewController.dismiss(animated: true) {
-                
-                EditInteractionFunnel.shared.logAltTextPromptDidTapDoNotAdd(project: WikimediaProject(wmfProject: viewModel.project))
-                
-                // show survey
-                // once survey is done, bring back up next recommendation
-                imageRecommendationsViewController.presentImageRecommendationBottomSheet()
-            }
-        }
-
-        let traceableDismissHandler: ScrollableEducationPanelTraceableDismissHandler = { lastAction in
-            switch lastAction {
-            case .tappedPrimary, .tappedSecondary:
-                break
-            default:
-                EditInteractionFunnel.shared.logAltTextPromptDidTapClose(project: WikimediaProject(wmfProject: viewModel.project))
-                imageRecommendationsViewController.presentImageRecommendationBottomSheet()
-            }
-        }
-
-        let panel = AltTextExperimentPanelViewController(showCloseButton: true, buttonStyle: .updatedStyle, primaryButtonTapHandler: primaryTapHandler, secondaryButtonTapHandler: secondaryTapHandler, traceableDismissHandler: traceableDismissHandler, theme: self.theme, isFlowB: isFlowB)
-        
-        EditInteractionFunnel.shared.logAltTextPromptDidAppear(project: WikimediaProject(wmfProject: viewModel.project))
-        
-        imageRecommendationsViewController.present(panel, animated: true)
-        let dataController = WMFAltTextDataController.shared
-        dataController?.markSawAltTextImageRecommendationsPrompt()
     }
 }
 
@@ -1448,7 +1508,7 @@ extension ExploreViewController: EditPreviewViewControllerDelegate {
 
 extension ExploreViewController: EditSaveViewControllerDelegate {
     
-    func editSaveViewControllerDidSave(_ editSaveViewController: EditSaveViewController, result: Result<EditorChanges, any Error>) {
+    func editSaveViewControllerDidSave(_ editSaveViewController: EditSaveViewController, result: Result<EditorChanges, any Error>, needsNewTempAccountToast: Bool? = false) {
         
         switch result {
         case .success(let changes):
@@ -1467,10 +1527,8 @@ extension ExploreViewController: EditSaveViewControllerDelegate {
             return
         }
         
-        let project = imageRecommendationsViewModel.project
-        
         for viewController in viewControllers {
-            if let imageRecommendationsViewController = viewController as? WMFImageRecommendationsViewController {
+            if viewController is WMFImageRecommendationsViewController {
                 navigationController?.popToViewController(viewController, animated: true)
                 
                 // Send Feedback
@@ -1480,13 +1538,9 @@ extension ExploreViewController: EditSaveViewControllerDelegate {
                 currentRecommendation.lastRevisionID = revID
                 
                 // Go to next recommendation and display success alert
-                imageRecommendationsViewModel.next { [weak self] in
+                imageRecommendationsViewModel.next {
                     
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-                        
-                        guard let self else {
-                            return
-                        }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
 
                         let title = CommonStrings.editPublishedToastTitle
                         let image = UIImage(systemName: "checkmark.circle.fill")
@@ -1520,16 +1574,6 @@ extension ExploreViewController: WMFFeatureAnnouncing {
 }
 
 extension ExploreViewController: WMFImageRecommendationsLoggingDelegate {
-    func logAltTextExperimentDidAssignGroup() {
-        
-        guard let imageRecommendationsViewModel else {
-            return
-        }
-        
-        let project = WikimediaProject(wmfProject: imageRecommendationsViewModel.project)
-        
-        EditInteractionFunnel.shared.logAltTextDidAssignImageRecsGroup(project: project)
-    }
 
     func logOnboardingDidTapPrimaryButton() {
         ImageRecommendationsFunnel.shared.logOnboardingDidTapContinue()
@@ -1709,122 +1753,51 @@ extension ExploreViewController: EditSaveViewControllerImageRecLoggingDelegate {
     
 }
 
-extension ExploreViewController: AltTextDelegate {
-    
-    private func localizedAltTextFormat(siteURL: URL) -> String {
-        let enFormat = "alt=%@"
-        guard let languageCode = siteURL.wmf_languageCode else {
-            return enFormat
-        }
-        
-        guard let magicWord = MagicWordUtils.getMagicWordForKey(.imageAlt, languageCode: languageCode) else {
-            return enFormat
-        }
-             
-        return magicWord.replacingOccurrences(of: "$1", with: "%@")
-    }
-    
-    func didTapPublish(altText: String, articleViewController: ArticleViewController, viewModel: WMFAltTextExperimentViewModel) {
-        let articleURL = articleViewController.articleURL
-        guard let siteURL = articleURL.wmf_site else {
+extension ExploreViewController: UISearchResultsUpdating {
+    func updateSearchResults(for searchController: UISearchController) {
+        guard let text = searchController.searchBar.text else {
             return
         }
         
-        let originalFullArticleWikitext = viewModel.fullArticleWikitextWithImage
-        let originalImageWikitext = viewModel.imageWikitext
-        let originalCaption = viewModel.caption
-        
-        var finalImageWikitext = originalImageWikitext
-        var finalWikitext = originalFullArticleWikitext
-        
-        let altTextToInsert = String.localizedStringWithFormat(localizedAltTextFormat(siteURL: siteURL), altText)
-        
-        if let originalCaption,
-           let range = originalImageWikitext.range(of: " | \(originalCaption)]]") {
-            finalImageWikitext.replaceSubrange(range, with: "| \(altTextToInsert) | \(originalCaption)]]")
-        } else if let range = originalImageWikitext.range(of: "]]") {
-            finalImageWikitext.replaceSubrange(range, with: "| \(altTextToInsert)]]")
-        }
-        
-        if let range = originalFullArticleWikitext.range(of: originalImageWikitext) {
-            finalWikitext.replaceSubrange(range, with: finalImageWikitext)
-        }
-        
-        let developerSettings = WMFDeveloperSettingsDataController()
-                
-        if viewModel.isFlowB && developerSettings.doNotPostImageRecommendationsEdit {
-            
-            navigationController?.popViewController(animated: true)
-            
-            // wait for animation to complete
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-                self?.presentAltTextEditPublishedToast()
-                self?.logAltTextEditSuccess(altText: altText, revisionID: 0)
-            }
-            
+        guard let searchViewController = navigationItem.searchController?.searchResultsController as? SearchViewController else {
             return
+        }
+        
+        if text.isEmpty {
+            searchViewController.searchTerm = nil
+            searchViewController.updateRecentlySearchedVisibility(searchText: nil)
         } else {
-            
-            let section: String?
-            if let sectionID = viewModel.sectionID {
-                section = "\(sectionID)"
-            } else {
-                section = nil
-            }
-            
-            let fetcher = WikiTextSectionUploader()
-            fetcher.uploadWikiText(finalWikitext, forArticleURL: articleURL, section: section, summary: viewModel.localizedStrings.editSummary, isMinorEdit: false, addToWatchlist: false, baseRevID: NSNumber(value: viewModel.lastRevisionID), captchaId: nil, captchaWord: nil, editTags: nil) { result, error in
-                
-                DispatchQueue.main.async {
-                    
-                    self.navigationController?.popViewController(animated: true)
-                    
-                    guard let fetchedData = result as? [String: Any],
-                          let newRevID = fetchedData["newrevid"] as? UInt64 else {
-                        return
-                    }
-                    
-                    if error == nil {
-                        // wait for animation to complete
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-                            self?.presentAltTextEditPublishedToast()
-                            self?.logAltTextEditSuccess(altText: altText, revisionID: newRevID)
-                        }
-                    }
-                }
-            }
+            searchViewController.searchTerm = text
+            searchViewController.updateRecentlySearchedVisibility(searchText: text)
+            searchViewController.search()
         }
     }
+}
+
+extension ExploreViewController: LogoutCoordinatorDelegate {
+    func didTapLogout() {
+        wmf_showKeepSavedArticlesOnDevicePanelIfNeeded(triggeredBy: .logout, theme: theme) {
+            self.dataStore.authenticationManager.logout(initiatedBy: .user)
+        }
+    }
+}
+
+
+extension ExploreViewController: YearInReviewBadgeDelegate {
+    func updateYIRBadgeVisibility() {
+        updateProfileButton()
+    }
+}
+
+extension ExploreViewController: UISearchControllerDelegate {
     
-    private func logAltTextEditSuccess(altText: String, revisionID: UInt64) {
-        
-        guard let imageRecommendationsViewModel,
-              let lastRecommendation = imageRecommendationsViewModel.lastRecommendation, let acceptDate = lastRecommendation.altTextExperimentAcceptDate,
-        let siteURL = imageRecommendationsViewModel.project.siteURL else {
-            return
-        }
-        
-        let articleTitle = lastRecommendation.title
-        let image = lastRecommendation.imageData.filename
-        let timeSpent = Int(Date().timeIntervalSince(acceptDate))
-        
-        guard let loggedInUser = dataStore.authenticationManager.getLoggedInUserCache(for: siteURL) else {
-            return
-        }
-        
-        EditInteractionFunnel.shared.logAltTextDidSuccessfullyPostEdit(timeSpent: timeSpent, revisionID: revisionID, altText: altText, articleTitle: articleTitle, image: image, username: loggedInUser.name, userEditCount: loggedInUser.editCount, registrationDate: loggedInUser.registrationDateString, project: WikimediaProject(wmfProject: imageRecommendationsViewModel.project))
+    func willPresentSearchController(_ searchController: UISearchController) {
+        presentingSearchResults = true
+        navigationController?.hidesBarsOnSwipe = false
     }
     
-    private func presentAltTextEditPublishedToast() {
-        let title = CommonStrings.editPublishedToastTitle
-        let image = UIImage(systemName: "checkmark.circle.fill")
-        
-        if UIAccessibility.isVoiceOverRunning {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                UIAccessibility.post(notification: UIAccessibility.Notification.announcement, argument: title)
-            }
-        } else {
-            WMFAlertManager.sharedInstance.showBottomAlertWithMessage(title, subtitle: nil, image: image, type: .custom, customTypeName: "edit-published", dismissPreviousAlerts: true)
-        }
+    func didDismissSearchController(_ searchController: UISearchController) {
+        presentingSearchResults = false
+        navigationController?.hidesBarsOnSwipe = true
     }
 }
